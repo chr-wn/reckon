@@ -77,7 +77,21 @@ export function Badge({ tone = "neutral", className, ...props }: ComponentProps<
   );
 }
 
-export function Avatar({ name, size = 28, className }: { name: string; size?: number; className?: string }) {
+export function Avatar({ name, src, size = 28, className }: { name: string; src?: string | null; size?: number; className?: string }) {
+  if (src) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- tiny remote avatars; next/image would need remotePatterns config
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        referrerPolicy="no-referrer"
+        className={cn("shrink-0 rounded-full bg-surface-3 object-cover", className)}
+        style={{ width: size, height: size }}
+      />
+    );
+  }
   return (
     <span
       aria-hidden

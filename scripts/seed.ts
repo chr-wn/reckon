@@ -1,19 +1,17 @@
 /**
- * Seeds a local demo: four friends in a group with ~4 months of history, each
- * with a different calibration "personality", so every stats view has data.
+ * Seeds a local demo: four friends with ~4 months of history, each with a
+ * different calibration "personality", so every stats view has data.
  *
  *   npm run db:reset && npm run db:seed
  *
- * Demo accounts (LOCAL DEV ONLY): ada, ben, cleo, dev — password: reckon-demo
+ * Sign in locally via the dev-login buttons on /login (no Google needed).
  * Refuses to run against DATABASE_URL unless you pass --force.
  */
 import { eq } from "drizzle-orm";
-import { hashPassword } from "../src/lib/auth/password";
 import { openScriptDb } from "./env";
 import * as t from "../src/lib/db/schema";
 import { zForInterval } from "../src/lib/scoring/math";
 
-const DEMO_PASSWORD = "reckon-demo";
 const DAY = 864e5;
 const MIN = 6e4;
 const NOW = Date.now();
@@ -48,14 +46,13 @@ interface Persona {
   bias: number;
   trueSd: number;
   statedSd: number;
-  drillHit: number;
 }
 
 const CAST: Persona[] = [
-  { username: "ada", displayName: "Ada", slope: 1.0, yesBias: 0, noise: 0.35, bias: 0.08, trueSd: 0.3, statedSd: 0.33, drillHit: 0.77 },
-  { username: "ben", displayName: "Ben", slope: 1.8, yesBias: 0.1, noise: 0.4, bias: 0.42, trueSd: 0.35, statedSd: 0.14, drillHit: 0.52 },
-  { username: "cleo", displayName: "Cleo", slope: 0.62, yesBias: 0, noise: 0.3, bias: 0.15, trueSd: 0.3, statedSd: 0.55, drillHit: 0.9 },
-  { username: "dev", displayName: "Dev", slope: 1.25, yesBias: 0.65, noise: 0.35, bias: 0.6, trueSd: 0.35, statedSd: 0.24, drillHit: 0.63 },
+  { username: "ada", displayName: "Ada", slope: 1.0, yesBias: 0, noise: 0.35, bias: 0.08, trueSd: 0.3, statedSd: 0.33 },
+  { username: "ben", displayName: "Ben", slope: 1.8, yesBias: 0.1, noise: 0.4, bias: 0.42, trueSd: 0.35, statedSd: 0.14 },
+  { username: "cleo", displayName: "Cleo", slope: 0.62, yesBias: 0, noise: 0.3, bias: 0.15, trueSd: 0.3, statedSd: 0.55 },
+  { username: "dev", displayName: "Dev", slope: 1.25, yesBias: 0.65, noise: 0.35, bias: 0.6, trueSd: 0.35, statedSd: 0.24 },
 ];
 
 // ── question templates ──────────────────────────────────────────────────────
@@ -112,19 +109,12 @@ async function main() {
       return;
     }
 
-    const passwordHash = await hashPassword(DEMO_PASSWORD);
     const users = await db
       .insert(t.users)
-      .values(CAST.map((c) => ({ username: c.username, displayName: c.displayName, passwordHash, timezone: "America/New_York", createdAt: new Date(NOW - 130 * DAY) })))
+      .values(CAST.map((c) => ({ username: c.username, displayName: c.displayName, timezone: "America/New_York", createdAt: new Date(NOW - 130 * DAY) })))
       .returning();
     const idOf = new Map(users.map((u) => [u.username, u.id]));
     const personaOf = new Map(CAST.map((c) => [idOf.get(c.username)!, c]));
-
-    const [group] = await db
-      .insert(t.groups)
-      .values({ name: "Study Buddies", description: "Dorm floor forecasting league", inviteCode: "demo-invite", createdBy: idOf.get("ada")!, createdAt: new Date(NOW - 125 * DAY) })
-      .returning();
-    await db.insert(t.groupMembers).values(users.map((u, i) => ({ groupId: group.id, userId: u.id, role: i === 0 ? ("owner" as const) : ("member" as const), joinedAt: new Date(NOW - (125 - i) * DAY) })));
 
     let questionCount = 0;
     let forecastCount = 0;
@@ -134,11 +124,11 @@ async function main() {
     type NewF = typeof t.forecasts.$inferInsert;
 
     async function insertQuestion(q: NewQ, fs: Omit<NewF, "questionId">[], shared: boolean) {
-      const [row] = await db.insert(t.questions).values(q).returning({ id: t.questions.id });
-      if (shared) {
-        await db.insert(t.questionGroups).values({ questionId: row.id, groupId: group.id });
-        sharedIds.push(row.id);
-      }
+      const [row] = await db
+        .insert(t.questions)
+        .values({ ...q, visibility: shared ? "public" : "private" })
+        .returning({ id: t.questions.id });
+      if (shared) sharedIds.push(row.id);
       if (fs.length) await db.insert(t.forecasts).values(fs.map((f) => ({ ...f, questionId: row.id })));
       questionCount++;
       forecastCount += fs.length;
@@ -355,38 +345,8 @@ async function main() {
       await db.insert(t.comments).values({ questionId: qid, userId: u.id, body: pick(COMMENTS), createdAt: new Date(NOW - rand() * 100 * DAY) });
     }
 
-    // Drill history (synthetic item keys; real rounds use the fact bank)
-    for (const u of users) {
-      const P = personaOf.get(u.id)!;
-      const rows: (typeof t.drillAttempts.$inferInsert)[] = [];
-      for (let i = 0; i < 70; i++) {
-        const at = new Date(NOW - (1 + rand() * 60) * DAY);
-        const roundId = `seed-${u.username}-${Math.floor(i / 10)}`;
-        if (i % 5 < 3) {
-          const hit = chance(P.drillHit + (i > 40 ? 0.05 : 0));
-          rows.push({ userId: u.id, roundId, itemKey: `seed-${i}`, kind: "interval", confidence: 0.8, low: 0, high: 1, answer: hit ? 0.5 : 2, correct: hit, createdAt: at });
-        } else {
-          const truth = normal() * 1.2;
-          const pA = clamp(round5(sigmoid(P.slope * truth + P.noise * normal())), 0.05, 0.95);
-          const aRight = rand() < sigmoid(truth);
-          rows.push({
-            userId: u.id,
-            roundId,
-            itemKey: `seed-cmp-${i}`,
-            kind: "compare",
-            probability: pA,
-            answer: aRight ? 1 : 0,
-            correct: (pA >= 0.5) === aRight,
-            createdAt: at,
-          });
-        }
-      }
-      await db.insert(t.drillAttempts).values(rows);
-    }
-
-    console.log(`✓ Seeded ${users.length} demo users, 1 group, ${questionCount} questions, ${forecastCount} forecasts.`);
-    console.log(`  Log in as ada, ben, cleo or dev — password: ${DEMO_PASSWORD} (local demo only).`);
-    console.log(`  Group invite link: /invite/demo-invite`);
+    console.log(`✓ Seeded ${users.length} demo users, ${questionCount} questions, ${forecastCount} forecasts.`);
+    console.log("  Sign in with the dev-login buttons on /login.");
   } finally {
     await close();
   }

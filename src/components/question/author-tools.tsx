@@ -3,9 +3,8 @@
 import { Pencil, Trash2, Undo2 } from "lucide-react";
 import { useState, useTransition } from "react";
 import { fromDateInput } from "@/components/forecast/quantiles";
-import { GroupPicker } from "@/components/group-picker";
-import { TagInput } from "@/components/tag-input";
 import { Button, Card, ErrorText, Label } from "@/components/ui";
+import { VisibilityToggle, type Visibility } from "@/components/visibility-toggle";
 import { deleteQuestion, resolveQuestion, saveReflection, unresolveQuestion, updateQuestion } from "@/lib/actions/questions";
 import { DURATION_UNITS, type DurationUnit } from "@/lib/constants";
 import { toMinutes } from "@/lib/format";
@@ -161,31 +160,26 @@ export function ReflectionForm({ id, initial, prompt }: { id: string; initial: s
 
 export function EditQuestion({
   q,
-  groups,
-  tagSuggestions,
 }: {
-  q: { id: string; title: string; details: string | null; tags: string[]; closesAt: number | null; groupIds: string[] };
-  groups: { id: string; name: string }[];
-  tagSuggestions: string[];
+  q: { id: string; title: string; details: string | null; visibility: Visibility; closesAt: number | null };
 }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(q.title);
   const [details, setDetails] = useState(q.details ?? "");
-  const [tags, setTags] = useState(q.tags);
+  const [visibility, setVisibility] = useState<Visibility>(q.visibility);
   const [closes, setCloses] = useState(q.closesAt ? toDateTimeInput(new Date(q.closesAt)) : "");
-  const [groupIds, setGroupIds] = useState(q.groupIds);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   if (!open) {
     return (
       <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
-        <Pencil size={14} /> Edit question
+        <Pencil size={14} /> Edit
       </Button>
     );
   }
   return (
-    <Card className="space-y-3 p-4">
+    <Card className="w-full space-y-3 p-4">
       <div>
         <Label htmlFor="e-title">Question</Label>
         <textarea id="e-title" rows={2} value={title} onChange={(e) => setTitle(e.target.value)} className="field field-sizing-content resize-y" />
@@ -198,16 +192,7 @@ export function EditQuestion({
         <Label htmlFor="e-closes">Resolve by</Label>
         <input id="e-closes" type="datetime-local" value={closes} onChange={(e) => setCloses(e.target.value)} className="field tnum" />
       </div>
-      <div>
-        <Label>Tags</Label>
-        <TagInput value={tags} onChange={setTags} suggestions={tagSuggestions} />
-      </div>
-      {groups.length > 0 && (
-        <div>
-          <Label>Shared with</Label>
-          <GroupPicker groups={groups} value={groupIds} onChange={setGroupIds} />
-        </div>
-      )}
+      <VisibilityToggle value={visibility} onChange={setVisibility} />
       <ErrorText>{error}</ErrorText>
       <div className="flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
@@ -218,13 +203,7 @@ export function EditQuestion({
           disabled={pending}
           onClick={() =>
             start(async () => {
-              const r = await updateQuestion(q.id, {
-                title,
-                details,
-                tags,
-                groupIds,
-                closesAt: fromDateTimeInput(closes)?.getTime() ?? null,
-              });
+              const r = await updateQuestion(q.id, { title, details, visibility, closesAt: fromDateTimeInput(closes)?.getTime() ?? null });
               if (!r.ok) setError(r.error);
               else setOpen(false);
             })

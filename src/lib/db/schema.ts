@@ -1,15 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  doublePrecision,
-  index,
-  pgEnum,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { doublePrecision, index, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -20,10 +10,15 @@ const ts = (name: string) => timestamp(name, { withTimezone: true, mode: "date" 
 
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
-  /** Lowercase, unique handle used in URLs. */
+  /** Lowercase, unique handle used in URLs (derived from the Google email). */
   username: text("username").notNull().unique(),
   displayName: text("display_name").notNull(),
-  passwordHash: text("password_hash").notNull(),
+  /** Google account id ("sub" claim). Null only for local demo users. */
+  googleSub: text("google_sub").unique(),
+  email: text("email"),
+  avatarUrl: text("avatar_url"),
+  /** Legacy: accounts from the old username/password login. Unused. */
+  passwordHash: text("password_hash"),
   /** IANA zone (e.g. "America/New_York"), captured from the browser; used to render dates. */
   timezone: text("timezone").notNull().default("UTC"),
   createdAt: ts("created_at").notNull().defaultNow(),
@@ -41,30 +36,6 @@ export const sessions = pgTable(
     createdAt: ts("created_at").notNull().defaultNow(),
   },
   (t) => [index("sessions_user_idx").on(t.userId)],
-).enableRLS();
-
-export const groups = pgTable("groups", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description"),
-  inviteCode: text("invite_code").notNull().unique(),
-  createdBy: uuid("created_by").references(() => users.id, { onDelete: "set null" }),
-  createdAt: ts("created_at").notNull().defaultNow(),
-}).enableRLS();
-
-export const groupMembers = pgTable(
-  "group_members",
-  {
-    groupId: uuid("group_id")
-      .notNull()
-      .references(() => groups.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["owner", "member"] }).notNull().default("member"),
-    joinedAt: ts("joined_at").notNull().defaultNow(),
-  },
-  (t) => [primaryKey({ columns: [t.groupId, t.userId] }), index("group_members_user_idx").on(t.userId)],
 ).enableRLS();
 
 /**
@@ -85,6 +56,9 @@ export const questions = pgTable(
     type: questionType("type").notNull(),
     title: text("title").notNull(),
     details: text("details"),
+    /** public = every signed-in friend can see and forecast; private = only the author. */
+    visibility: text("visibility", { enum: ["public", "private"] }).notNull().default("public"),
+    /** Legacy, no longer shown in the UI. */
     tags: text("tags")
       .array()
       .notNull()
@@ -114,19 +88,6 @@ export const questions = pgTable(
     index("questions_resolved_idx").on(t.resolvedAt),
     index("questions_closes_idx").on(t.closesAt),
   ],
-).enableRLS();
-
-export const questionGroups = pgTable(
-  "question_groups",
-  {
-    questionId: uuid("question_id")
-      .notNull()
-      .references(() => questions.id, { onDelete: "cascade" }),
-    groupId: uuid("group_id")
-      .notNull()
-      .references(() => groups.id, { onDelete: "cascade" }),
-  },
-  (t) => [primaryKey({ columns: [t.questionId, t.groupId] }), index("question_groups_group_idx").on(t.groupId)],
 ).enableRLS();
 
 export const forecasts = pgTable(
@@ -170,36 +131,8 @@ export const comments = pgTable(
   (t) => [index("comments_question_idx").on(t.questionId, t.createdAt)],
 ).enableRLS();
 
-export const drillAttempts = pgTable(
-  "drill_attempts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    roundId: text("round_id").notNull(),
-    /** Fact id for interval items, "factA|factB" for comparisons. */
-    itemKey: text("item_key").notNull(),
-    kind: text("kind", { enum: ["interval", "compare"] }).notNull(),
-    /** interval: the requested central-interval probability */
-    confidence: doublePrecision("confidence"),
-    low: doublePrecision("low"),
-    high: doublePrecision("high"),
-    /** compare: probability that the FIRST option is the right answer */
-    probability: doublePrecision("probability"),
-    /** interval: the true value; compare: 1 if the first option is right, else 0 */
-    answer: doublePrecision("answer").notNull(),
-    /** interval: truth inside the interval; compare: leaned toward the right option */
-    correct: boolean("correct").notNull(),
-    createdAt: ts("created_at").notNull().defaultNow(),
-  },
-  (t) => [index("drill_attempts_user_idx").on(t.userId, t.createdAt)],
-).enableRLS();
-
 export type User = typeof users.$inferSelect;
-export type Group = typeof groups.$inferSelect;
 export type Question = typeof questions.$inferSelect;
 export type Forecast = typeof forecasts.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
-export type DrillAttempt = typeof drillAttempts.$inferSelect;
 export type QuestionType = Question["type"];

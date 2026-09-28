@@ -17,12 +17,11 @@ import type { ContinuousKind } from "./quantiles";
 
 function NudgeBox({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex gap-3 rounded-xl border border-accent/25 bg-accent-soft px-3.5 py-3 text-sm text-ink-2">
-      <Compass size={18} className="mt-0.5 shrink-0 text-accent-ink" aria-hidden />
+    <div className="flex gap-2.5 rounded-lg bg-accent-soft px-3 py-2 text-sm text-ink-2" title="Based on your resolved predictions">
+      <Compass size={16} className="mt-0.5 shrink-0 text-accent-ink" aria-hidden />
       <div className="min-w-0 flex-1 space-y-1">
-        <div className="text-xs font-semibold uppercase tracking-wide text-accent-ink">Your track record</div>
         {children}
-        {action && <div className="pt-1.5">{action}</div>}
+        {action}
       </div>
     </div>
   );

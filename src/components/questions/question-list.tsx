@@ -1,8 +1,8 @@
-import { ArrowRight, Lock, Users } from "lucide-react";
+import { ArrowRight, Lock } from "lucide-react";
 import Link from "next/link";
 import type { QuestionRow } from "@/lib/data/questions";
-import { fmtDate, relativeTime } from "@/lib/format";
-import { cn } from "../ui";
+import { fmtDate, fmtValue, pct, relativeTime } from "@/lib/format";
+import { Avatar, cn } from "../ui";
 import { ForecastSummary, OutcomeBadge, RecordBadge, TypeIcon } from "./bits";
 
 export function QuestionList({
@@ -10,21 +10,19 @@ export function QuestionList({
   viewerId,
   tz,
   now,
-  showAuthor = true,
   trailing,
 }: {
   rows: QuestionRow[];
   viewerId: string;
   tz: string;
   now: number;
-  showAuthor?: boolean;
   /** Extra per-row controls (e.g. quick resolve buttons) */
   trailing?: (row: QuestionRow) => React.ReactNode;
 }) {
   return (
     <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
       {rows.map((q) => (
-        <QuestionListItem key={q.id} q={q} viewerId={viewerId} tz={tz} now={now} showAuthor={showAuthor} trailing={trailing?.(q)} />
+        <QuestionListItem key={q.id} q={q} viewerId={viewerId} tz={tz} now={now} trailing={trailing?.(q)} />
       ))}
     </ul>
   );
@@ -38,49 +36,44 @@ function statusText(q: QuestionRow, now: number, tz: string): { text: string; ur
     if (t < now) return { text: `was due ${fmtDate(q.closesAt, tz, "monthDay")}`, urgent: true };
     return { text: `closes ${relativeTime(t, now)}` };
   }
-  return null;
+  return { text: `posted ${relativeTime(q.createdAt, now)}` };
 }
 
-export function QuestionListItem({
-  q,
-  viewerId,
-  tz,
-  now,
-  showAuthor,
-  trailing,
-}: {
-  q: QuestionRow;
-  viewerId: string;
-  tz: string;
-  now: number;
-  showAuthor: boolean;
-  trailing?: React.ReactNode;
-}) {
+function OthersSummary({ q, tz }: { q: QuestionRow; tz: string }) {
+  if (!q.others) return null;
+  const value = q.type === "binary" ? (q.others.probability != null ? pct(q.others.probability) : null) : q.others.median != null ? fmtValue(q, q.others.median, tz) : null;
+  if (!value) return null;
+  return (
+    <span className="text-xs text-ink-3 tnum">
+      {q.others.count === 1 ? "1 friend" : `${q.others.count} friends`}: <span className="font-medium text-ink-2">{value}</span>
+    </span>
+  );
+}
+
+export function QuestionListItem({ q, viewerId, tz, now, trailing }: { q: QuestionRow; viewerId: string; tz: string; now: number; trailing?: React.ReactNode }) {
   const mine = q.authorId === viewerId;
   const status = statusText(q, now, tz);
-  const others = q.forecasterCount - (q.myForecast ? 1 : 0);
+  const hiddenOthers = !q.others && q.forecasterCount - (q.myForecast ? 1 : 0);
   return (
-    <li className="group relative flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-surface-2/50 sm:px-5">
-      <TypeIcon type={q.type} className="mt-0.5" />
+    <li className="relative flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-surface-2/50 sm:px-5">
+      <Avatar name={q.author.displayName} src={q.author.avatarUrl} size={28} className="mt-0.5" />
       <div className="min-w-0 flex-1">
         <Link href={`/q/${q.id}`} className="font-medium leading-snug text-ink after:absolute after:inset-0 after:content-['']">
           {q.title}
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.8125rem] text-ink-3">
-          {showAuthor && !mine && <span className="text-ink-2">{q.author.displayName}</span>}
+          <span className="text-ink-2">{mine ? "You" : q.author.displayName}</span>
+          <TypeIcon type={q.type} size={13} />
           {status && <span className={cn(status.urgent && "font-medium text-bad-ink")}>{status.text}</span>}
-          {others > 0 && (
+          {q.visibility === "private" && (
             <span className="inline-flex items-center gap-1">
-              <Users size={12} /> {others}
+              <Lock size={12} /> only you
             </span>
           )}
-          {mine && q.forecasterCount <= 1 && !q.resolvedAt && <Lock size={12} aria-label="Only you so far" />}
-          {q.tags.slice(0, 3).map((t) => (
-            <span key={t}>#{t}</span>
-          ))}
+          {hiddenOthers ? <span>{hiddenOthers === 1 ? "1 forecast hidden" : `${hiddenOthers} forecasts hidden`} until you forecast</span> : null}
         </div>
       </div>
-      <div className="relative z-10 flex shrink-0 flex-col items-end gap-1.5 text-right text-sm">
+      <div className="relative z-10 flex shrink-0 flex-col items-end gap-1 text-right text-sm">
         {q.resolvedAt ? (
           <>
             <OutcomeBadge q={q} tz={tz} />
@@ -93,6 +86,7 @@ export function QuestionListItem({
             Forecast <ArrowRight size={14} />
           </Link>
         )}
+        {!q.resolvedAt && <OthersSummary q={q} tz={tz} />}
         {trailing}
       </div>
     </li>

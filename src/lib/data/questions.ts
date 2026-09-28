@@ -1,46 +1,22 @@
 import "server-only";
-import { and, asc, desc, eq, exists, gt, ilike, inArray, isNotNull, isNull, lt, ne, notExists, or, sql, type SQL } from "drizzle-orm";
-import {
-  comments,
-  db,
-  forecasts,
-  groupMembers,
-  groups,
-  questionGroups,
-  questions,
-  users,
-  type Forecast,
-  type Question,
-} from "@/lib/db";
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import { comments, db, forecasts, questions, users, type Forecast, type Question } from "@/lib/db";
+import { median } from "@/lib/scoring/math";
 import { scoreQuestion, type ScoredRecord } from "@/lib/scoring/records";
 
 export interface UserLite {
   id: string;
   username: string;
   displayName: string;
+  avatarUrl: string | null;
 }
 
-const userLite = { id: users.id, username: users.username, displayName: users.displayName };
+const userLite = { id: users.id, username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl };
 
-/** SQL predicate: the question is the user's own, or shared into a group they belong to. */
+/** SQL predicate: your own predictions, plus everyone's public ones. */
 export function visibleTo(userId: string): SQL {
-  return or(
-    eq(questions.authorId, userId),
-    exists(
-      db
-        .select({ one: sql`1` })
-        .from(questionGroups)
-        .innerJoin(groupMembers, eq(groupMembers.groupId, questionGroups.groupId))
-        .where(and(eq(questionGroups.questionId, questions.id), eq(groupMembers.userId, userId))),
-    ),
-  )!;
+  return or(eq(questions.authorId, userId), eq(questions.visibility, "public"))!;
 }
-
-const forecastBy = (userId: string) =>
-  db
-    .select({ one: sql`1` })
-    .from(forecasts)
-    .where(and(eq(forecasts.questionId, questions.id), eq(forecasts.userId, userId)));
 
 /** Forecasting is open until resolution, the close time, or (for timed tasks) the moment work starts. */
 export function isOpenForForecasts(q: Pick<Question, "resolvedAt" | "closesAt" | "workStartedAt">, now = Date.now()) {
@@ -53,13 +29,14 @@ export interface QuestionRow extends Question {
   author: UserLite;
   forecasterCount: number;
   myForecast: ForecastLite | null;
+  /** Friends' latest forecasts, summarized — only once you've forecast (or it's closed). */
+  others: { count: number; probability: number | null; median: number | null } | null;
   /** your score record if resolved and you forecast */
   myRecord: ScoredRecord | null;
 }
 
-async function hydrateRows(rows: (Question & { author: UserLite })[], viewerId: string): Promise<QuestionRow[]> {
+async function hydrateRows(rows: (Question & { author: UserLite })[], viewerId: string, now: number): Promise<QuestionRow[]> {
   if (!rows.length) return [];
-  const ids = rows.map((r) => r.id);
   const fs = await db
     .select({
       questionId: forecasts.questionId,
@@ -71,27 +48,42 @@ async function hydrateRows(rows: (Question & { author: UserLite })[], viewerId: 
       createdAt: forecasts.createdAt,
     })
     .from(forecasts)
-    .where(inArray(forecasts.questionId, ids))
+    .where(
+      inArray(
+        forecasts.questionId,
+        rows.map((r) => r.id),
+      ),
+    )
     .orderBy(asc(forecasts.createdAt));
   const byQ = new Map<string, typeof fs>();
-  for (const f of fs) {
-    const list = byQ.get(f.questionId) ?? [];
-    list.push(f);
-    byQ.set(f.questionId, list);
-  }
+  for (const f of fs) byQ.set(f.questionId, [...(byQ.get(f.questionId) ?? []), f]);
+
   return rows.map((q) => {
     const list = byQ.get(q.id) ?? [];
     const mine = list.filter((f) => f.userId === viewerId);
+    const latest = new Map<string, (typeof fs)[number]>();
+    for (const f of list) latest.set(f.userId, f); // ascending → last wins
+    const theirs = [...latest.values()].filter((f) => f.userId !== viewerId);
+    const revealed = mine.length > 0 || !isOpenForForecasts(q, now);
+    const nums = (xs: (number | null)[]) => xs.filter((x): x is number => x != null);
     return {
       ...q,
-      forecasterCount: new Set(list.map((f) => f.userId)).size,
+      forecasterCount: latest.size,
       myForecast: mine.length ? mine[mine.length - 1] : null,
+      others:
+        revealed && theirs.length
+          ? {
+              count: theirs.length,
+              probability: q.type === "binary" ? median(nums(theirs.map((f) => f.probability))) : null,
+              median: q.type === "binary" ? null : median(nums(theirs.map((f) => f.median))),
+            }
+          : null,
       myRecord: q.resolvedAt && mine.length ? (scoreQuestion(q, mine)[0] ?? null) : null,
     };
   });
 }
 
-async function selectRows(where: SQL, order: SQL[], limit = 100) {
+async function selectRows(where: SQL, order: SQL[], limit = 150) {
   const rows = await db
     .select({ q: questions, author: userLite })
     .from(questions)
@@ -102,116 +94,47 @@ async function selectRows(where: SQL, order: SQL[], limit = 100) {
   return rows.map((r) => ({ ...r.q, author: r.author }));
 }
 
-export async function getDashboard(userId: string) {
-  const now = new Date();
-  const [inProgress, toResolve, awaiting, myOpen, recentlyResolved] = await Promise.all([
-    // Tasks whose timer has been started but that aren't resolved yet
-    selectRows(
-      and(eq(questions.authorId, userId), eq(questions.type, "duration"), isNull(questions.resolvedAt), isNotNull(questions.workStartedAt))!,
-      [desc(questions.workStartedAt)],
-      20,
-    ),
-    selectRows(
-      and(eq(questions.authorId, userId), isNull(questions.resolvedAt), isNull(questions.workStartedAt), lt(questions.closesAt, now))!,
-      [asc(questions.closesAt)],
-      50,
-    ),
-    // Friends' open questions you haven't forecast yet
-    selectRows(
-      and(
-        ne(questions.authorId, userId),
-        visibleTo(userId),
-        isNull(questions.resolvedAt),
-        isNull(questions.workStartedAt),
-        or(isNull(questions.closesAt), gt(questions.closesAt, now)),
-        notExists(forecastBy(userId)),
-      )!,
-      [desc(questions.createdAt)],
-      20,
-    ),
-    selectRows(
-      and(
-        eq(questions.authorId, userId),
-        isNull(questions.resolvedAt),
-        isNull(questions.workStartedAt),
-        or(isNull(questions.closesAt), gt(questions.closesAt, now)),
-      )!,
-      [sql`${questions.closesAt} asc nulls last`, desc(questions.createdAt)],
-      12,
-    ),
-    selectRows(
-      and(visibleTo(userId), isNotNull(questions.resolvedAt), gt(questions.resolvedAt, new Date(now.getTime() - 14 * 864e5)))!,
-      [desc(questions.resolvedAt)],
-      8,
-    ),
-  ]);
-  const [a, b, c, d, e] = await Promise.all([
-    hydrateRows(inProgress, userId),
-    hydrateRows(toResolve, userId),
-    hydrateRows(awaiting, userId),
-    hydrateRows(myOpen, userId),
-    hydrateRows(recentlyResolved, userId),
-  ]);
-  return { inProgress: a, toResolve: b, awaiting: c, myOpen: d, recentlyResolved: e };
+export const STATUSES = ["open", "resolve", "resolved", "all"] as const;
+export type StreamStatus = (typeof STATUSES)[number];
+export const SORTS = ["new", "closing", "resolved"] as const;
+export type StreamSort = (typeof SORTS)[number];
+
+export const defaultSort = (status: StreamStatus): StreamSort =>
+  status === "resolved" ? "resolved" : status === "resolve" ? "closing" : "new";
+
+/** The home stream: everything visible to you, filtered by state and author. */
+export async function listStream(
+  viewerId: string,
+  opts: { status: StreamStatus; authorId?: string; sort: StreamSort },
+  now: number,
+): Promise<QuestionRow[]> {
+  const nowDate = new Date(now);
+  const conds: SQL[] = [visibleTo(viewerId)];
+  if (opts.authorId) conds.push(eq(questions.authorId, opts.authorId));
+  if (opts.status === "open") conds.push(isNull(questions.resolvedAt), or(isNull(questions.closesAt), gt(questions.closesAt, nowDate))!);
+  if (opts.status === "resolve") conds.push(isNull(questions.resolvedAt), isNull(questions.workStartedAt), lt(questions.closesAt, nowDate));
+  if (opts.status === "resolved") conds.push(isNotNull(questions.resolvedAt));
+  const order =
+    opts.sort === "closing"
+      ? [sql`${questions.closesAt} asc nulls last`, desc(questions.createdAt)]
+      : opts.sort === "resolved"
+        ? [sql`${questions.resolvedAt} desc nulls last`, desc(questions.createdAt)]
+        : [desc(questions.createdAt)];
+  return hydrateRows(await selectRows(and(...conds)!, order), viewerId, now);
 }
 
-export type ListStatus = "open" | "resolve" | "resolved" | "all";
-export type ListScope = "all" | "mine" | "friends";
-
-export interface ListFilters {
-  status?: ListStatus;
-  scope?: ListScope;
-  type?: Question["type"];
-  tag?: string;
-  search?: string;
-  groupId?: string;
+/** Your timed tasks that have started but aren't resolved. */
+export async function listInProgress(userId: string, now: number): Promise<QuestionRow[]> {
+  const rows = await selectRows(
+    and(eq(questions.authorId, userId), eq(questions.type, "duration"), isNull(questions.resolvedAt), isNotNull(questions.workStartedAt))!,
+    [desc(questions.workStartedAt)],
+    10,
+  );
+  return hydrateRows(rows, userId, now);
 }
 
-export async function listQuestions(userId: string, f: ListFilters): Promise<QuestionRow[]> {
-  const now = new Date();
-  const conds: SQL[] = [visibleTo(userId)];
-  if (f.scope === "mine") conds.push(eq(questions.authorId, userId));
-  if (f.scope === "friends") conds.push(ne(questions.authorId, userId));
-  if (f.type) conds.push(eq(questions.type, f.type));
-  if (f.tag) conds.push(sql`${f.tag} = any(${questions.tags})`);
-  if (f.search) conds.push(ilike(questions.title, `%${f.search.replace(/[%_\\]/g, "\\$&")}%`));
-  if (f.groupId) {
-    conds.push(
-      exists(
-        db
-          .select({ one: sql`1` })
-          .from(questionGroups)
-          .where(and(eq(questionGroups.questionId, questions.id), eq(questionGroups.groupId, f.groupId))),
-      ),
-    );
-  }
-  let order: SQL[] = [desc(questions.createdAt)];
-  switch (f.status) {
-    case "open":
-      conds.push(isNull(questions.resolvedAt), or(isNull(questions.closesAt), gt(questions.closesAt, now))!);
-      order = [sql`${questions.closesAt} asc nulls last`, desc(questions.createdAt)];
-      break;
-    case "resolve":
-      // Only authors can resolve, so this is your own overdue questions.
-      conds.push(eq(questions.authorId, userId), isNull(questions.resolvedAt), isNull(questions.workStartedAt), lt(questions.closesAt, now));
-      order = [asc(questions.closesAt)];
-      break;
-    case "resolved":
-      conds.push(isNotNull(questions.resolvedAt));
-      order = [desc(questions.resolvedAt)];
-      break;
-  }
-  return hydrateRows(await selectRows(and(...conds)!, order, 200), userId);
-}
-
-export async function getUserTags(userId: string): Promise<string[]> {
-  const rows = await db
-    .select({ tag: sql<string>`unnest(${questions.tags})` })
-    .from(questions)
-    .where(eq(questions.authorId, userId));
-  const counts = new Map<string, number>();
-  for (const r of rows) counts.set(r.tag, (counts.get(r.tag) ?? 0) + 1);
-  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t);
+export async function listUsers(): Promise<UserLite[]> {
+  return db.select(userLite).from(users).orderBy(asc(users.displayName));
 }
 
 export interface ForecastView extends Forecast {
@@ -227,7 +150,6 @@ export interface CommentView {
 
 export interface QuestionDetail {
   question: Question & { author: UserLite };
-  groups: { id: string; name: string }[];
   isAuthor: boolean;
   /** Others' forecasts and comments stay hidden until you've forecast (or it resolves), to avoid anchoring. */
   revealed: boolean;
@@ -243,18 +165,13 @@ export async function getQuestionDetail(id: string, viewerId: string): Promise<Q
   const [row] = await selectRows(and(eq(questions.id, id), visibleTo(viewerId))!, [asc(questions.createdAt)], 1);
   if (!row) return null;
 
-  const [allForecasts, gs, cs] = await Promise.all([
+  const [allForecasts, cs] = await Promise.all([
     db
       .select({ f: forecasts, user: userLite })
       .from(forecasts)
       .innerJoin(users, eq(users.id, forecasts.userId))
       .where(eq(forecasts.questionId, id))
       .orderBy(asc(forecasts.createdAt)),
-    db
-      .select({ id: groups.id, name: groups.name })
-      .from(questionGroups)
-      .innerJoin(groups, eq(groups.id, questionGroups.groupId))
-      .where(eq(questionGroups.questionId, id)),
     db
       .select({ id: comments.id, body: comments.body, createdAt: comments.createdAt, user: userLite })
       .from(comments)
@@ -270,7 +187,6 @@ export async function getQuestionDetail(id: string, viewerId: string): Promise<Q
 
   return {
     question: row,
-    groups: gs,
     isAuthor: row.authorId === viewerId,
     revealed,
     forecasts: visible,

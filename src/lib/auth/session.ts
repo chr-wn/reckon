@@ -13,6 +13,7 @@ export interface SessionUser {
   id: string;
   username: string;
   displayName: string;
+  avatarUrl: string | null;
   timezone: string;
 }
 
@@ -53,6 +54,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       id: users.id,
       username: users.username,
       displayName: users.displayName,
+      avatarUrl: users.avatarUrl,
       timezone: users.timezone,
       expiresAt: sessions.expiresAt,
     })

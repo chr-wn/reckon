@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq, exists, inArray, isNotNull, sql } from "drizzle-orm";
-import { db, forecasts, groupMembers, questionGroups, questions, users } from "@/lib/db";
+import { db, forecasts, questions, users } from "@/lib/db";
 import { scoreQuestion, type ScoredRecord } from "@/lib/scoring/records";
 import { visibleTo } from "./questions";
 
@@ -37,33 +37,28 @@ export async function loadUserRecords(targetId: string, viewerId: string): Promi
   return qs.flatMap((q) => scoreQuestion(q, fs));
 }
 
-/** Scored records for every current member's forecasts on resolved questions shared into the group. */
-export async function loadGroupRecords(groupId: string): Promise<ScoredRecord[]> {
+/** Everyone's scored records on resolved public questions — the fair basis for comparing friends. */
+export async function loadPublicRecords(): Promise<ScoredRecord[]> {
   const qs = await db
-    .select({ q: questions })
+    .select()
     .from(questions)
-    .innerJoin(questionGroups, eq(questionGroups.questionId, questions.id))
-    .where(and(eq(questionGroups.groupId, groupId), isNotNull(questions.resolvedAt)));
+    .where(and(eq(questions.visibility, "public"), isNotNull(questions.resolvedAt)));
   if (!qs.length) return [];
-  const memberIds = db.select({ id: groupMembers.userId }).from(groupMembers).where(eq(groupMembers.groupId, groupId));
   const fs = await db
     .select()
     .from(forecasts)
     .where(
-      and(
-        inArray(
-          forecasts.questionId,
-          qs.map((r) => r.q.id),
-        ),
-        inArray(forecasts.userId, memberIds),
+      inArray(
+        forecasts.questionId,
+        qs.map((q) => q.id),
       ),
     );
-  return qs.flatMap((r) => scoreQuestion(r.q, fs));
+  return qs.flatMap((q) => scoreQuestion(q, fs));
 }
 
 export async function getUserByUsername(username: string) {
   const [u] = await db
-    .select({ id: users.id, username: users.username, displayName: users.displayName, createdAt: users.createdAt })
+    .select({ id: users.id, username: users.username, displayName: users.displayName, avatarUrl: users.avatarUrl, createdAt: users.createdAt })
     .from(users)
     .where(eq(users.username, username.toLowerCase()))
     .limit(1);

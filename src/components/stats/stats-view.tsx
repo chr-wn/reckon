@@ -1,25 +1,23 @@
-import Link from "next/link";
 import { CalibrationChart, CalibrationTable } from "@/components/charts/calibration-chart";
 import { DataTable, Figure } from "@/components/charts/chart-kit";
 import { CoverageBars } from "@/components/charts/coverage-bars";
 import { PitHistogram } from "@/components/charts/pit-histogram";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { Card, EmptyState, SectionHeader, Stat } from "@/components/ui";
-import type { DrillSummary } from "@/lib/data/drills";
 import { fmtRatio, pct } from "@/lib/format";
 import { MIN_FOR_VERDICT, recalibrate, yesBias } from "@/lib/scoring/binary";
 import { brierTrend, hitRateTrend, multiplierTrend, summarize, type ScoredRecord } from "@/lib/scoring/records";
 import { VERDICT_COPY } from "@/lib/verdicts";
 
-export function StatsView({ records, drills, self, tz }: { records: ScoredRecord[]; drills: DrillSummary | null; self: boolean; tz: string }) {
+export function StatsView({ records, self, tz }: { records: ScoredRecord[]; self: boolean; tz: string }) {
   const s = summarize(records);
   const you = self ? "you" : "they";
   const your = self ? "your" : "their";
-  if (s.counts.total === 0 && !drills?.total) {
+  if (s.counts.total === 0) {
     return (
       <EmptyState title="No resolved predictions yet">
         {self
-          ? "Stats appear as your predictions resolve. Quick wins: time a task tonight, or do a calibration drill."
+          ? "Stats appear as your predictions resolve. Quick win: time a task tonight."
           : "Nothing resolved that you can see yet."}
       </EmptyState>
     );
@@ -41,7 +39,7 @@ export function StatsView({ records, drills, self, tz }: { records: ScoredRecord
         <Stat
           label="Confidence"
           value={<span className="text-xl leading-tight">{b ? VERDICT_COPY[b.verdict].short : "–"}</span>}
-          sub={b && b.n < MIN_FOR_VERDICT ? `needs ${MIN_FOR_VERDICT}+ resolved` : "from your yes/no forecasts"}
+          sub={b && b.n < MIN_FOR_VERDICT ? `needs ${MIN_FOR_VERDICT}+ resolved` : `from ${your} yes/no forecasts`}
         />
         <Stat label="Ranges that caught it" value={c ? pct(c.hitRate) : "–"} sub={c ? `aiming for ${pct(c.targetRate)}` : "no range questions yet"} />
         <Stat
@@ -159,88 +157,33 @@ export function StatsView({ records, drills, self, tz }: { records: ScoredRecord
         </section>
       )}
 
-      {s.tags.length > 0 && (
-        <section>
-          <SectionHeader title="By tag" subtitle={`Per-tag base rates — the outside view ${you} can bring to the next forecast`} />
-          <Card className="overflow-x-auto p-0">
-            <table className="w-full text-sm tnum">
-              <thead>
-                <tr className="border-b border-line text-left text-xs text-ink-3">
-                  <th className="px-4 py-2 font-medium">Tag</th>
-                  <th className="px-4 py-2 font-medium">Yes/no</th>
-                  <th className="px-4 py-2 font-medium">Avg forecast</th>
-                  <th className="px-4 py-2 font-medium">Happened</th>
-                  <th className="px-4 py-2 font-medium">Ranges</th>
-                  <th className="px-4 py-2 font-medium">Caught</th>
-                  <th className="px-4 py-2 font-medium">Actual ÷ guess</th>
-                </tr>
-              </thead>
-              <tbody>
-                {s.tags.slice(0, 20).map((t) => {
-                  const gap = t.binary ? t.binary.meanP - t.binary.freq : 0;
-                  return (
-                    <tr key={t.tag} className="border-b border-line/60 last:border-0">
-                      <td className="px-4 py-2">
-                        <Link href={`/questions?tag=${encodeURIComponent(t.tag)}&status=resolved`} className="font-medium text-ink hover:underline">
-                          #{t.tag}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 text-ink-2">{t.binary?.n ?? "–"}</td>
-                      <td className="px-4 py-2 text-ink-2">{t.binary ? pct(t.binary.meanP) : "–"}</td>
-                      <td className={t.binary && Math.abs(gap) >= 0.15 && t.binary.n >= 4 ? "px-4 py-2 font-semibold text-bad-ink" : "px-4 py-2 text-ink-2"}>
-                        {t.binary ? pct(t.binary.freq) : "–"}
-                      </td>
-                      <td className="px-4 py-2 text-ink-2">{t.continuous?.n ?? "–"}</td>
-                      <td className="px-4 py-2 text-ink-2">
-                        {t.continuous ? `${pct(t.continuous.hitRate)} / ${pct(t.continuous.targetRate)}` : "–"}
-                      </td>
-                      <td className="px-4 py-2 text-ink-2">{t.continuous?.multiplier != null ? fmtRatio(t.continuous.multiplier) : "–"}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </Card>
-          <p className="mt-2 text-xs text-ink-3">Red = forecasts and outcomes differ by 15+ points on 4+ questions.</p>
-        </section>
-      )}
-
-      {drills && drills.total > 0 && (
-        <section>
-          <SectionHeader
-            title="Calibration drills"
-            subtitle={`${drills.total} answered over ${drills.rounds} rounds`}
-            action={
-              self && (
-                <Link href="/drills" className="text-sm font-medium text-accent-ink hover:underline">
-                  Practice →
-                </Link>
-              )
-            }
-          />
-          <div className="grid gap-4 lg:grid-cols-2">
-            {drills.byLevel.length > 0 && (
-              <Figure title="Trivia ranges" subtitle="How often the true answer landed inside the range">
-                <CoverageBars levels={drills.byLevel} />
-                {drills.recentHitRate != null && (
-                  <p className="mt-3 text-sm text-ink-2">
-                    Last 50: <b className="text-ink">{pct(drills.recentHitRate)}</b> vs. {pct(drills.intervalHitRate)} all-time.
-                  </p>
-                )}
-              </Figure>
-            )}
-            {drills.compare && (
-              <Figure
-                title="Which-is-bigger calibration"
-                subtitle={`${drills.compareN} comparisons · Brier ${drills.compare.brier.toFixed(3)}`}
-                table={<CalibrationTable bins={drills.compare.bins} />}
-              >
-                <CalibrationChart bins={drills.compare.bins} label="Drill comparison calibration" />
-              </Figure>
-            )}
-          </div>
-        </section>
-      )}
+      <details className="group rounded-2xl border border-line bg-surface p-5 text-sm leading-relaxed text-ink-2 shadow-card">
+        <summary className="cursor-pointer list-none font-semibold text-ink [&::-webkit-details-marker]:hidden">
+          How scoring works <span className="font-normal text-ink-3 group-open:hidden">— show</span>
+        </summary>
+        <div className="mt-3 space-y-2">
+          <p>
+            <b className="text-ink">Calibrated</b> means your 70%s happen about 70% of the time, and reality lands inside your 80% ranges about 80%
+            of the time — not 100%, which would mean your ranges are too wide.
+          </p>
+          <p>
+            <b className="text-ink">Brier score</b> for yes/no questions is (forecast − outcome)²: 0 is perfect, 0.25 is what always saying 50%
+            gets you. It rewards honesty — shading your number never helps on average.
+          </p>
+          <p>
+            <b className="text-ink">Ranges</b> are low end / best guess / high end: with 80% confidence, a 10% chance it&apos;s lower and 10% it&apos;s
+            higher. Durations are judged as ratios (&ldquo;took 1.5× your guess&rdquo;).
+          </p>
+          <p>
+            <b className="text-ink">Updating is fine</b>: each forecast counts for as long as it stood, so a last-minute change after you know the
+            answer barely moves your score. Friends&apos; forecasts stay hidden until you&apos;ve made your own.
+          </p>
+          <p>
+            <b className="text-ink">Getting better</b>: judge each end of a range separately (&ldquo;what would genuinely surprise me?&rdquo;), start
+            from how similar things went before, and multiply time estimates by your own tasks-take number.
+          </p>
+        </div>
+      </details>
     </div>
   );
 }

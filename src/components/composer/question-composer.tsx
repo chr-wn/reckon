@@ -9,27 +9,21 @@ import { IntervalPreview } from "@/components/forecast/interval-preview";
 import { ProbabilityInput } from "@/components/forecast/probability-input";
 import { ConfidencePicker, DurationUnitSelect, IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
 import { EMPTY_DRAFT, parseDraft, toDraft, type QuantileDraft } from "@/components/forecast/quantiles";
-import { GroupPicker } from "@/components/group-picker";
-import { TagInput } from "@/components/tag-input";
 import { Button, Card, cn, ErrorText, Label } from "@/components/ui";
+import { VisibilityToggle, type Visibility } from "@/components/visibility-toggle";
 import { createQuestion } from "@/lib/actions/questions";
 import { DEFAULT_CONFIDENCE, TYPE_LABELS, type DurationUnit } from "@/lib/constants";
 import { fmtDate, relativeTime } from "@/lib/format";
 import { detectType, PLACEHOLDERS } from "@/lib/ideas";
-import { useHydrated } from "@/lib/use-hydrated";
 import { deadlinePresets, fromDateTimeInput, parseDeadline, toDateTimeInput } from "@/lib/parse-date";
 import type { Scale } from "@/lib/scoring/continuous";
 import type { QType, TrackRecord } from "@/lib/scoring/records";
+import { useHydrated } from "@/lib/use-hydrated";
 import type { CreateQuestionInput } from "@/lib/validation";
 
 export interface ComposerProps {
-  groups: { id: string; name: string }[];
-  defaultGroupIds: string[];
-  tags: string[];
   track: TrackRecord;
   tz: string;
-  mode: "quick" | "full";
-  initial?: { title?: string; type?: QType };
   /** chosen on the server so SSR and hydration agree */
   placeholderIndex?: number;
 }
@@ -43,7 +37,7 @@ export function QuestionComposer(props: ComposerProps) {
         <div className="flex items-center gap-3 rounded-xl border border-good/30 bg-good-soft px-4 py-2.5 text-sm text-good-ink">
           <Check size={16} className="shrink-0" />
           <span className="min-w-0 flex-1 truncate">
-            Logged: <span className="font-medium">{saved.title}</span>
+            Posted: <span className="font-medium">{saved.title}</span>
           </span>
           <Link href={`/q/${saved.id}`} className="shrink-0 font-medium underline underline-offset-2">
             View
@@ -73,20 +67,10 @@ function defaultDeadline(type: QType): Date | null {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7, 23, 59);
 }
 
-function ComposerBody({
-  groups,
-  defaultGroupIds,
-  tags: tagSuggestions,
-  track,
-  tz,
-  mode,
-  initial,
-  placeholderIndex = 0,
-  onCreated,
-}: ComposerProps & { onCreated: (id: string, title: string) => void }) {
+function ComposerBody({ track, tz, placeholderIndex = 0, onCreated }: ComposerProps & { onCreated: (id: string, title: string) => void }) {
   const router = useRouter();
-  const [title, setTitle] = useState(initial?.title ?? "");
-  const [pickedType, setPickedType] = useState<QType | null>(initial?.type ?? null);
+  const [title, setTitle] = useState("");
+  const [pickedType, setPickedType] = useState<QType | null>(null);
   const [probability, setProbability] = useState<number | null>(null);
   const [draft, setDraft] = useState<QuantileDraft>(EMPTY_DRAFT);
   const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE);
@@ -94,8 +78,7 @@ function ComposerBody({
   const [numUnit, setNumUnit] = useState("");
   const [logScale, setLogScale] = useState(false);
   const [closesInput, setClosesInput] = useState<string | null>(null); // null = not touched
-  const [tags, setTags] = useState<string[]>([]);
-  const [groupIds, setGroupIds] = useState<string[]>(defaultGroupIds);
+  const [visibility, setVisibility] = useState<Visibility>("public");
   const [details, setDetails] = useState("");
   const [note, setNote] = useState("");
   const [startTimer, setStartTimer] = useState(false);
@@ -106,7 +89,7 @@ function ComposerBody({
   const placeholder = PLACEHOLDERS[placeholderIndex % PLACEHOLDERS.length];
 
   const type: QType = pickedType ?? detectType(title) ?? "binary";
-  const expanded = mode === "full" || title.trim().length > 0;
+  const expanded = title.trim().length > 0;
   const kind = type === "binary" ? null : type;
   const scale: Scale = type === "duration" ? "log" : type === "numeric" && logScale ? "log" : "linear";
 
@@ -124,7 +107,7 @@ function ComposerBody({
     setError(null);
     if (title.trim().length < 3) return setError("Write a question first.");
     const closesAt = closesDate ? closesDate.getTime() : null;
-    const common = { title, details, tags, groupIds, closesAt, note };
+    const common = { title, details, visibility, closesAt, note };
     let input: CreateQuestionInput;
     if (type === "binary") {
       if (probability == null) return setError("Pick a probability.");
@@ -142,13 +125,13 @@ function ComposerBody({
     startTransition(async () => {
       const res = await createQuestion(input);
       if (!res.ok) return setError(res.error);
-      if (mode === "full" || (type === "duration" && startTimer)) router.push(`/q/${res.data.id}`);
+      if (type === "duration" && startTimer) router.push(`/q/${res.data.id}`);
       else onCreated(res.data.id, title.trim());
     });
   }
 
   return (
-    <Card className={cn("p-4 sm:p-5", mode === "quick" && !expanded && "py-3 sm:py-3.5")}>
+    <Card className={cn("p-4 sm:p-5", !expanded && "py-3 sm:py-3.5")}>
       <label htmlFor="q-title" className="sr-only">
         Question
       </label>
@@ -161,9 +144,8 @@ function ComposerBody({
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
           else if (e.key === "Enter") e.preventDefault();
         }}
-        placeholder={mode === "quick" ? `Make a prediction… e.g. “${placeholder}”` : placeholder}
-        className="field-sizing-content block max-h-40 w-full resize-none bg-transparent focus-visible:outline-none text-[1.125rem] font-medium leading-snug text-ink outline-none placeholder:font-normal placeholder:text-ink-3"
-        autoFocus={mode === "full"}
+        placeholder={`Predict something… e.g. “${placeholder}”`}
+        className="field-sizing-content block max-h-40 w-full resize-none bg-transparent text-[1.125rem] font-medium leading-snug text-ink outline-none placeholder:font-normal placeholder:text-ink-3 focus-visible:outline-none"
       />
 
       {expanded && (
@@ -192,7 +174,7 @@ function ComposerBody({
           {type === "binary" ? (
             <div className="space-y-3">
               <ProbabilityInput value={probability} onChange={setProbability} />
-              <BinaryNudge p={probability} track={track} tags={tags} />
+              <BinaryNudge p={probability} track={track} tags={[]} />
             </div>
           ) : (
             <div className="space-y-3">
@@ -224,39 +206,29 @@ function ComposerBody({
                 confidence={confidence}
                 scale={scale}
                 track={track}
-                tags={tags}
+                tags={[]}
                 unit={unitLabel}
                 tz={tz}
                 onApply={(q) => setDraft(toDraft(kind!, q, durUnit))}
               />
-              <p className="text-xs text-ink-3">
-                Gut check: would you rather bet on your range, or on a spinner that wins {confidence * 100}% of the time? If the spinner, widen
-                your range.
-              </p>
             </div>
           )}
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="q-closes">
-                {type === "duration" ? "Plan to finish by" : "Resolve by"} <span className="font-normal text-ink-3">(optional)</span>
-              </Label>
-              <div className="flex gap-2">
-                <input
-                  id="q-closes"
-                  type="datetime-local"
-                  value={closesValue}
-                  onChange={(e) => setClosesInput(e.target.value)}
-                  className="field tnum"
-                />
-                {closesValue && (
-                  <Button variant="ghost" size="md" className="px-2.5" onClick={() => setClosesInput("")} aria-label="No deadline">
-                    <X size={16} />
-                  </Button>
-                )}
-              </div>
-              <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                {hydrated && deadlinePresets().map((p) => (
+          <div>
+            <Label htmlFor="q-closes">
+              {type === "duration" ? "Plan to finish by" : "Resolve by"} <span className="font-normal text-ink-3">(optional)</span>
+            </Label>
+            <div className="flex max-w-sm gap-2">
+              <input id="q-closes" type="datetime-local" value={closesValue} onChange={(e) => setClosesInput(e.target.value)} className="field tnum" />
+              {closesValue && (
+                <Button variant="ghost" size="md" className="px-2.5" onClick={() => setClosesInput("")} aria-label="No deadline">
+                  <X size={16} />
+                </Button>
+              )}
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              {hydrated &&
+                deadlinePresets().map((p) => (
                   <button
                     key={p.label}
                     type="button"
@@ -266,34 +238,12 @@ function ComposerBody({
                     {p.label}
                   </button>
                 ))}
-              </div>
-              {closesInput == null && parsedDeadline && (
-                <p className="mt-1 text-xs text-ink-3">
-                  From “{parsedDeadline.matched}” · {fmtDate(parsedDeadline.date, tz, "dateTime")} ({relativeTime(parsedDeadline.date)})
-                </p>
-              )}
             </div>
-            <div>
-              <span className="mb-1.5 block text-sm font-medium text-ink-2">Share with</span>
-              {groups.length ? (
-                <GroupPicker groups={groups} value={groupIds} onChange={setGroupIds} />
-              ) : (
-                <p className="text-sm text-ink-3">
-                  Private for now.{" "}
-                  <Link href="/groups" className="text-accent-ink hover:underline">
-                    Create or join a group
-                  </Link>{" "}
-                  to forecast with friends.
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="q-tags">
-              Tags <span className="font-normal text-ink-3">— your per-tag track record becomes a base rate</span>
-            </Label>
-            <TagInput id="q-tags" value={tags} onChange={setTags} suggestions={tagSuggestions} />
+            {closesInput == null && parsedDeadline && (
+              <p className="mt-1 text-xs text-ink-3">
+                From “{parsedDeadline.matched}” · {fmtDate(parsedDeadline.date, tz, "dateTime")} ({relativeTime(parsedDeadline.date)})
+              </p>
+            )}
           </div>
 
           <div>
@@ -304,29 +254,29 @@ function ComposerBody({
               aria-expanded={showMore}
             >
               <ChevronDown size={16} className={cn("transition-transform", showMore && "rotate-180")} />
-              Details, reasoning{type === "numeric" ? ", scale" : ""}
+              Add details
             </button>
             {showMore && (
               <div className="mt-3 space-y-4">
                 <div>
-                  <Label htmlFor="q-details">Resolution criteria / details</Label>
+                  <Label htmlFor="q-details">What exactly counts?</Label>
                   <textarea
                     id="q-details"
                     rows={2}
                     value={details}
                     onChange={(e) => setDetails(e.target.value)}
-                    placeholder="What exactly counts? Make it unambiguous for future-you."
+                    placeholder="Resolution criteria, so future-you can't wriggle out of it."
                     className="field field-sizing-content min-h-16 resize-y"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="q-note">Why do you think this? (private reasoning, shown next to your forecast)</Label>
+                  <Label htmlFor="q-note">Your reasoning</Label>
                   <textarea
                     id="q-note"
                     rows={2}
                     value={note}
                     onChange={(e) => setNote(e.target.value)}
-                    placeholder="Reference class, key uncertainty, what would change your mind…"
+                    placeholder="Why this number? What would change your mind?"
                     className="field field-sizing-content min-h-16 resize-y"
                   />
                 </div>
@@ -334,10 +284,8 @@ function ComposerBody({
                   <label className="flex items-start gap-2.5 text-sm text-ink-2">
                     <input type="checkbox" checked={logScale} onChange={(e) => setLogScale(e.target.checked)} className="mt-1 accent-[var(--accent)]" />
                     <span>
-                      <span className="font-medium text-ink">Measure errors as ratios (log scale)</span>
-                      <br />
-                      For positive quantities that vary by multiples — money, counts, populations. Being off by 2× counts the same whether
-                      the answer is 10 or 10,000.
+                      <span className="font-medium text-ink">Measure errors as ratios</span> — for quantities that vary by multiples (money,
+                      counts), so being off by 2× counts the same at 10 or 10,000.
                     </span>
                   </label>
                 )}
@@ -347,17 +295,20 @@ function ComposerBody({
 
           <ErrorText>{error}</ErrorText>
 
-          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
+            <VisibilityToggle value={visibility} onChange={setVisibility} />
             {type === "duration" && (
-              <label className="mr-auto flex items-center gap-2 text-sm text-ink-2">
+              <label className="flex items-center gap-2 text-sm text-ink-2">
                 <input type="checkbox" checked={startTimer} onChange={(e) => setStartTimer(e.target.checked)} className="accent-[var(--accent)]" />
-                <Play size={14} /> Start the timer now
+                <Play size={14} /> Start timer now
               </label>
             )}
-            <span className="hidden text-xs text-ink-3 sm:inline">⌘↵ to save</span>
-            <Button onClick={submit} disabled={pending}>
-              {pending ? "Saving…" : "Make prediction"}
-            </Button>
+            <div className="ml-auto flex items-center gap-3">
+              <span className="hidden text-xs text-ink-3 sm:inline">⌘↵</span>
+              <Button onClick={submit} disabled={pending}>
+                {pending ? "Posting…" : "Post"}
+              </Button>
+            </div>
           </div>
         </div>
       )}

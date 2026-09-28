@@ -1,4 +1,4 @@
-import { ArrowLeft, Lock, Users } from "lucide-react";
+import { ArrowLeft, Globe, Lock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -12,7 +12,7 @@ import { TimerCard } from "@/components/questions/timer-card";
 import { Avatar, Badge, Card, SectionHeader } from "@/components/ui";
 import { requireUser } from "@/lib/auth/session";
 import { TYPE_LABELS } from "@/lib/constants";
-import { getComposerData } from "@/lib/data/composer";
+import { getTrackRecord } from "@/lib/data/composer";
 import { getQuestionDetail, getVisibleQuestion, isOpenForForecasts, type ForecastView } from "@/lib/data/questions";
 import { fmtDate, fmtRatio, fmtValue, pct, percentileText, relativeTime } from "@/lib/format";
 import { requestNow } from "@/lib/request-time";
@@ -38,7 +38,7 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
   const detail = await getQuestionDetail(id, user.id);
   if (!detail) notFound();
   const { question: q, isAuthor, revealed } = detail;
-  const composer = await getComposerData(user.id);
+  const { track } = await getTrackRecord(user.id);
   const tz = user.timezone;
   const now = requestNow();
   const open = isOpenForForecasts(q, now);
@@ -98,8 +98,8 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
 
   return (
     <div>
-      <Link href="/questions" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2">
-        <ArrowLeft size={14} /> Questions
+      <Link href="/" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink-2">
+        <ArrowLeft size={14} /> All predictions
       </Link>
 
       <header className="mb-6">
@@ -112,22 +112,15 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
         <h1 className="max-w-3xl font-serif text-[2.1rem] leading-[1.1] tracking-[-0.01em] text-ink sm:text-[2.5rem]">{q.title}</h1>
         <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-ink-3">
           <span className="inline-flex items-center gap-1.5">
-            <Avatar name={q.author.displayName} size={20} />
+            <Avatar name={q.author.displayName} src={q.author.avatarUrl} size={20} />
             <span className="text-ink-2">{isAuthor ? "You" : q.author.displayName}</span>
           </span>
           <span>asked {relativeTime(q.createdAt, now)}</span>
           {q.closesAt && <span>resolve by {fmtDate(q.closesAt, tz, "dateTime")}</span>}
           <span className="inline-flex items-center gap-1">
-            {detail.groups.length ? (
+            {q.visibility === "public" ? (
               <>
-                <Users size={13} /> {detail.groups.map((g, i) => (
-                  <span key={g.id}>
-                    {i > 0 && ", "}
-                    <Link href={`/groups/${g.id}`} className="hover:text-ink-2 hover:underline">
-                      {g.name}
-                    </Link>
-                  </span>
-                ))}
+                <Globe size={13} /> Public
               </>
             ) : (
               <>
@@ -135,11 +128,6 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
               </>
             )}
           </span>
-          {q.tags.map((t) => (
-            <Link key={t} href={`/questions?tag=${encodeURIComponent(t)}`} className="hover:text-ink-2">
-              #{t}
-            </Link>
-          ))}
         </div>
         {q.details && <p className="mt-4 max-w-3xl whitespace-pre-wrap text-[0.9375rem] leading-relaxed text-ink-2">{q.details}</p>}
       </header>
@@ -201,9 +189,9 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
 
           {open && (
             <ForecastForm
-              q={{ id: q.id, type: q.type, unit: q.unit, scale, confidence: q.confidence, tags: q.tags }}
+              q={{ id: q.id, type: q.type, unit: q.unit, scale, confidence: q.confidence, tags: [] }}
               latest={myLatest}
-              track={composer.track}
+              track={track}
               tz={tz}
               othersCount={others}
             />
@@ -240,7 +228,7 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
                 <ul className="divide-y divide-line border-t border-line">
                   {[...detail.forecasts].reverse().map((f) => (
                     <li key={f.id} className="flex items-start gap-3 py-2.5 text-sm">
-                      <Avatar name={f.user.displayName} size={24} />
+                      <Avatar name={f.user.displayName} src={f.user.avatarUrl} size={24} />
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-baseline gap-x-2">
                           <span className="font-medium text-ink">{nameOf(f)}</span>
@@ -343,12 +331,9 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
                   id: q.id,
                   title: q.title,
                   details: q.details,
-                  tags: q.tags,
+                  visibility: q.visibility,
                   closesAt: q.closesAt?.getTime() ?? null,
-                  groupIds: detail.groups.map((g) => g.id),
                 }}
-                groups={composer.groups}
-                tagSuggestions={composer.tags}
               />
               {q.resolvedAt && <UnresolveButton id={q.id} />}
               <DeleteQuestionButton id={q.id} />

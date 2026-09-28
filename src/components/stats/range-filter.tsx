@@ -14,14 +14,18 @@ export function parseRange(v: unknown): (typeof RANGES)[number] {
   return RANGES.find((r) => r.key === v) ?? RANGES[3];
 }
 
-/** One filter row above everything it scopes. */
-export function RangeFilter({ base, active }: { base: string; active: RangeKey }) {
+/** One filter row above everything it scopes. `params` are other search params to keep. */
+export function RangeFilter({ base, active, params = {} }: { base: string; active: RangeKey; params?: Record<string, string> }) {
+  const href = (key: string) => {
+    const qs = new URLSearchParams({ ...params, ...(key === "all" ? {} : { range: key }) }).toString();
+    return qs ? `${base}?${qs}` : base;
+  };
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {RANGES.map((r) => (
         <Link
           key={r.key}
-          href={r.key === "all" ? base : `${base}?range=${r.key}`}
+          href={href(r.key)}
           className={cn(
             "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
             active === r.key ? "bg-ink text-surface" : "text-ink-2 hover:bg-surface-2 hover:text-ink",

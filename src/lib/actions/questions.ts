@@ -1,11 +1,11 @@
 "use server";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
-import { comments, db, forecasts, groupMembers, questionGroups, questions, type Question } from "@/lib/db";
+import { comments, db, forecasts, questions, type Question } from "@/lib/db";
 import { getVisibleQuestion, isOpenForForecasts } from "@/lib/data/questions";
 import { effectiveScale } from "@/lib/scoring/records";
 import {
@@ -24,15 +24,6 @@ export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; e
 
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const refreshAll = () => revalidatePath("/", "layout");
-
-async function memberGroupIds(userId: string, groupIds: string[]): Promise<string[]> {
-  if (!groupIds.length) return [];
-  const rows = await db
-    .select({ id: groupMembers.groupId })
-    .from(groupMembers)
-    .where(and(eq(groupMembers.userId, userId), inArray(groupMembers.groupId, groupIds)));
-  return rows.map((r) => r.id);
-}
 
 function checkQuantiles(type: Question["type"], scale: "linear" | "log", q: { low: number }): string | null {
   if ((type === "duration" || scale === "log") && q.low <= 0) {
@@ -53,7 +44,6 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Action
     const err = checkQuantiles(d.type, scale, d.forecast);
     if (err) return fail(err);
   }
-  const groupIds = await memberGroupIds(user.id, d.groupIds);
   const now = new Date();
   const startTimer = d.type === "duration" && d.startTimer;
 
@@ -65,7 +55,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Action
         type: d.type,
         title: d.title,
         details: d.details || null,
-        tags: [...new Set(d.tags)],
+        visibility: d.visibility,
         unit: d.type === "numeric" ? d.unit || null : d.type === "duration" ? d.unit : null,
         scale,
         confidence: d.type === "binary" ? 0.8 : d.confidence,
@@ -74,7 +64,6 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Action
         timerRunningSince: startTimer ? now : null,
       })
       .returning({ id: questions.id });
-    if (groupIds.length) await tx.insert(questionGroups).values(groupIds.map((groupId) => ({ questionId: q.id, groupId })));
     await tx.insert(forecasts).values({
       questionId: q.id,
       userId: user.id,
@@ -213,26 +202,21 @@ export async function finishTimer(questionId: string): Promise<ActionResult<{ mi
 }
 
 export async function updateQuestion(questionId: string, input: UpdateQuestionInput): Promise<ActionResult> {
-  const { user, q } = await requireAuthorQuestion(questionId);
+  const { q } = await requireAuthorQuestion(questionId);
   if (!q) return fail("Only the question's author can edit it.");
   const parsed = updateQuestionSchema.safeParse(input);
   if (!parsed.success) return fail(firstError(parsed.error));
   const d = parsed.data;
-  const groupIds = await memberGroupIds(user.id, d.groupIds);
-  await db.transaction(async (tx) => {
-    await tx
-      .update(questions)
-      .set({
-        title: d.title,
-        details: d.details || null,
-        tags: [...new Set(d.tags)],
-        closesAt: d.closesAt != null ? new Date(d.closesAt) : null,
-        updatedAt: new Date(),
-      })
-      .where(eq(questions.id, q.id));
-    await tx.delete(questionGroups).where(eq(questionGroups.questionId, q.id));
-    if (groupIds.length) await tx.insert(questionGroups).values(groupIds.map((groupId) => ({ questionId: q.id, groupId })));
-  });
+  await db
+    .update(questions)
+    .set({
+      title: d.title,
+      details: d.details || null,
+      visibility: d.visibility,
+      closesAt: d.closesAt != null ? new Date(d.closesAt) : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(questions.id, q.id));
   refreshAll();
   return { ok: true, data: undefined };
 }
@@ -242,7 +226,7 @@ export async function deleteQuestion(questionId: string): Promise<void> {
   if (!q) return;
   await db.delete(questions).where(eq(questions.id, q.id));
   refreshAll();
-  redirect("/questions");
+  redirect("/");
 }
 
 const commentSchema = z.string().trim().min(1, "Say something first").max(2000);

@@ -1,25 +1,7 @@
 import { z } from "zod";
 import { CONFIDENCE_LEVELS, DURATION_UNITS } from "./constants";
-import { isValidTimeZone } from "./format";
 
-export const usernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(/^[a-z0-9_-]{3,24}$/, "Username: 3–24 characters, letters, numbers, _ or -");
-export const passwordSchema = z.string().min(8, "Password must be at least 8 characters").max(200);
-export const displayNameSchema = z.string().trim().min(1, "Name is required").max(40);
-export const timezoneSchema = z
-  .string()
-  .default("UTC")
-  .transform((tz) => (isValidTimeZone(tz) ? tz : "UTC"));
-
-export const tagSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .transform((t) => t.replace(/^#/, "").replace(/\s+/g, "-"))
-  .pipe(z.string().regex(/^[\p{L}\p{N}_-]{1,32}$/u, "Tags: up to 32 letters, numbers, - or _"));
+export const visibilitySchema = z.enum(["public", "private"]);
 
 const confidence = z
   .number()
@@ -34,8 +16,7 @@ export const quantilesSchema = z
 const common = {
   title: z.string().trim().min(3, "Question is too short").max(300),
   details: z.string().trim().max(5000).optional().default(""),
-  tags: z.array(tagSchema).max(8).default([]),
-  groupIds: z.array(z.uuid()).max(20).default([]),
+  visibility: visibilitySchema.default("public"),
   /** epoch ms */
   closesAt: z.number().nullable().default(null),
   note: z.string().trim().max(2000).optional().default(""),
@@ -80,8 +61,7 @@ export type ResolveInput = z.input<typeof resolveSchema>;
 export const updateQuestionSchema = z.object({
   title: common.title,
   details: common.details,
-  tags: common.tags,
-  groupIds: common.groupIds,
+  visibility: visibilitySchema,
   closesAt: common.closesAt,
 });
 export type UpdateQuestionInput = z.input<typeof updateQuestionSchema>;

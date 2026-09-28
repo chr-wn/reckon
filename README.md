@@ -1,6 +1,6 @@
 # Reckon
 
-A calibration gym for friends. Make predictions — yes/no with a probability, or a range for *how long / how much / when* — resolve them, and see honestly how well your confidence matches reality. Forecast on each other's questions, compare on the same questions, and train with instant-feedback drills.
+A small, shared prediction log for friends. Post a prediction — yes/no with a probability, or a range for *how long / how much / when* — resolve it later, and see honestly how well your confidence matches reality. One stream, public or private predictions, Google sign-in.
 
 ## Quick start
 
@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. No database setup: in development the app uses an embedded Postgres ([PGlite](https://pglite.dev)) stored in `./.data/pglite`, and `npm run dev` applies migrations automatically.
+Open http://localhost:3000. No database setup: in development the app uses an embedded Postgres ([PGlite](https://pglite.dev)) stored in `./.data/pglite`, and `npm run dev` applies migrations automatically. Locally, `/login` shows **dev-login buttons** for every user, so you don't need Google to try things.
 
 **Demo data** (optional — stop the dev server first; PGlite allows one process at a time):
 
@@ -17,77 +17,68 @@ Open http://localhost:3000. No database setup: in development the app uses an em
 npm run db:reset && npm run db:seed
 ```
 
-This creates four friends in a group ("Study Buddies") with ~4 months of history, each with a different calibration personality — Ada is well calibrated, Ben is overconfident, Cleo underconfident, Dev optimistic with a big planning fallacy. Log in as `ada`, `ben`, `cleo` or `dev` with password `reckon-demo` (local demo only). Invite link: `/invite/demo-invite`.
+Four friends with ~4 months of history, each with a different calibration personality — Ada is well calibrated, Ben overconfident, Cleo underconfident, Dev optimistic with a big planning fallacy.
 
 ## Going live (Supabase + Vercel)
 
-Reckon talks to Postgres directly and has its own auth (username + password, sessions stored in Postgres), so from Supabase you only need the **database connection string** — no `@supabase/supabase-js`, no Supabase Auth, no API keys. Any Postgres works (Neon, Railway, RDS…).
+Reckon talks to Postgres directly and has its own sessions, so from Supabase you only need the **database connection string** — no Supabase client or Supabase Auth. Any Postgres works.
 
-1. **Get the connection string.** In the Supabase dashboard: **Connect → Connection string → Transaction pooler** (port 6543 — works from serverless, IPv4). Replace `[YOUR-PASSWORD]` with your database password (reset it under *Database settings* if you've lost it). URL-encode the password if it contains `@ : / # ?` etc.
-2. **Import the repo in Vercel** (*Add New → Project*). Next.js is auto-detected. Before the first deploy, add environment variables:
-   - `DATABASE_URL` — the string from step 1 (Production; add it to Preview too if you want preview deploys to work)
-   - `SIGNUP_CODE` *(recommended)* — new accounts need this code unless they arrive through a group invite link
-3. **Deploy.** The `vercel-build` script applies migrations before `next build`, on production deploys only (preview deploys skip them so an unmerged branch can't change the shared schema).
-4. **Match regions** (optional but snappier): set the Vercel function region (*Settings → Functions*) to your Supabase region — e.g. `iad1` for US East.
+1. **Database.** In Supabase: **Connect → Connection string → Transaction pooler** (port 6543). Replace `[YOUR-PASSWORD]` with your database password (URL-encode `@ : / # ?` etc.).
+2. **Google sign-in.** In [Google Cloud Console](https://console.cloud.google.com/): create a project, open *Google Auth Platform* (the OAuth consent screen), set an app name and support email, choose audience **External**, and **Publish** the app — the basic `openid email profile` scopes don't need Google's review, whereas in "Testing" mode only listed test users can sign in. Then **Clients → Create client → Web application** with authorized redirect URI `https://<your-domain>/auth/google/callback` (add `http://localhost:3000/auth/google/callback` too if you want Google locally).
+3. **Vercel environment variables** (*Settings → Environment Variables*):
+   - `DATABASE_URL` — from step 1
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — from step 2
+   - `SIGNUP_CODE` *(optional)* — a new account's first sign-in needs this code; returning friends never do
+4. **Deploy.** Production deploys apply migrations before building (`vercel-build`); preview deploys skip them so an unmerged branch can't change the shared schema. If your domain changes, update the redirect URI in Google (or set `APP_URL`).
+5. **Match regions** (optional): set Vercel's function region to your Supabase region.
 
-After that, every push to `main` redeploys (and migrates) automatically.
-
-**Security note.** Supabase exposes the `public` schema through its Data API using a key that's public by design. Migrations `0001`/`0002` turn on row-level security for every table (with no policies) and revoke the API roles' privileges, so nothing is readable or writable that way — the app itself connects as the table owner and is unaffected. Keep `.enableRLS()` on any new table in `src/lib/db/schema.ts`.
+**Security note.** Supabase exposes the `public` schema through its Data API using a key that's public by design. Every table has row-level security enabled with no policies, and the API roles' privileges are revoked (migrations `0001`/`0002`), so nothing is readable that way; the app connects as the table owner and is unaffected. Keep `.enableRLS()` on any new table in `src/lib/db/schema.ts`.
 
 **Migrating by hand**: put `DATABASE_URL=...` in `.env.production.local` (gitignored) and run `npm run db:migrate:prod`. Don't put it in `.env.local`, or `npm run dev` would use the real database.
 
-**Free-tier note**: Supabase pauses free projects after a week without activity; unpause from the dashboard.
-
 ## How it works
-
-The in-app **Learn** page (`/learn`) explains all of this for users; here's the implementer's version.
 
 ### Question types
 
 | Type | Forecast | Stored as |
 |---|---|---|
 | `binary` | probability, 1–99% | `forecasts.probability` |
-| `duration` | low / best guess / high at the question's confidence (default 80%) | minutes; always log scale |
-| `numeric` | low / best guess / high | raw numbers; linear or log scale (per question) |
+| `duration` | low / best guess / high at the question's confidence (default 80%), optional task timer | minutes; always log scale |
+| `numeric` | low / best guess / high | raw numbers; linear or log scale |
 | `date` | low / best guess / high | epoch ms (local noon) |
 
-Range inputs ask for each tail separately ("10% chance it's lower than…") because eliciting bounds separately yields better-calibrated intervals than asking for a range in one go.
+The composer guesses the type from the wording ("How long…", "When…", "Will…") and parses deadlines ("by Friday", "tonight").
 
 ### Scoring (`src/lib/scoring/`)
 
-- **Binary**: Brier score. Calibration chart with 11 centred bins and Wilson 90% intervals. A logistic *recalibration* fit, `P(yes) = σ(a + b·logit p)`, with weak priors, drives the verdict (b < 1 ⇒ overconfident) and the "your 90%s happen ~78% of the time" nudges.
-- **Ranges**: the three quantiles define a *two-piece normal* in scoring space (log space for ratio-like quantities) that matches them exactly. Every outcome gets a standardized error `z` — comparable across questions of any scale. From that: hit rate vs. stated confidence, PIT histogram ("where reality landed"), bias (share above the median), and for durations the planning multiplier (geometric mean of actual ÷ guess, each task capped at 8× so one accidental timer doesn't dominate).
-- **Time-weighting**: each forecast counts for the share of the window it was standing (first forecast → min(close, resolve, timer start)). Last-second updates don't help.
-- **Relative scores** (group leaderboards): your score minus the median of everyone else on the *same* question. Binary uses Brier; ranges use the Gneiting–Raftery interval score normalized by the others' median width — scale-free and still proper.
-- **Outside-view adjustment**: across your resolved range questions, `z ~ N(bias, spread²)`, shrunk toward N(0,1) with a 2-question prior. A new forecast is re-expressed through that model to suggest a calibrated range ("Use this").
+- **Yes/no**: Brier score, calibration chart with Wilson 90% intervals, and a logistic recalibration fit (`P(yes) = σ(a + b·logit p)`, weak priors) behind the "your 90%s happen ~78% of the time" hints.
+- **Ranges**: the three quantiles define a two-piece normal (log space for durations), giving every outcome a scale-free standardized error: hit rate vs. stated confidence, where reality landed (PIT), bias, and the planning multiplier (actual ÷ guess, each task capped at 8×).
+- **Time-weighting**: each forecast counts for as long as it stood; last-second updates don't help.
+- **Scoreboard**: resolved public predictions only; "±" is Brier minus the median of everyone else on the same questions.
 
-Tests: `npm test` (scoring math, time weighting, recalibration, adjustment).
+Tests: `npm test`.
 
-### Social mechanics
+### Visibility & sign-in
 
-- Questions are private or shared with one or more groups; visibility is enforced in SQL (`visibleTo()` in `src/lib/data/questions.ts`) and re-checked in every server action.
-- Others' forecasts **and comments** are hidden until you forecast (or forecasting closes) — anti-anchoring.
-- Profiles are visible to people you share a group with, and only include questions you can both see.
-
-### Drills
-
-`src/lib/drills/facts.ts` holds 233 fact-checked trivia facts (sources in the file header). Rounds mix range questions and "which is bigger/earlier?" comparisons generated from comparison groups; answers are only revealed server-side after submission. Drill stats are kept separate from real-world calibration.
+- Predictions are **public** (every signed-in user can see and forecast) or **private** (author only); enforced in SQL (`visibleTo()` in `src/lib/data/questions.ts`) and re-checked in every server action.
+- Others' forecasts **and comments** are hidden until you forecast (or forecasting closes).
+- Google sign-in is a plain OAuth 2.0 + PKCE flow (`src/lib/auth/google.ts`, `src/app/auth/google/*`) feeding the app's own DB-backed sessions.
 
 ## Project layout
 
 ```
 src/
-  app/(auth)/         login, signup
-  app/(app)/          dashboard, questions, q/[id], new, groups, invite, stats, u/[username], drills, learn, settings
-  components/         UI primitives, charts (SVG, CVD-validated palette), composer, forecast inputs
+  app/(auth)/login    Google sign-in page (plus dev logins locally)
+  app/auth/           OAuth start/callback routes, dev login
+  app/(app)/          home stream, q/[id], stats
+  components/         UI primitives, charts, composer, forecast inputs
   lib/db/             Drizzle schema + clients (postgres-js with DATABASE_URL; PGlite in dev only)
-  lib/auth/           scrypt password hashing, DB-backed sessions (hashed tokens, httpOnly cookie)
+  lib/auth/           Google OAuth, accounts, sessions (hashed tokens, httpOnly cookie)
   lib/data/           server-only queries (visibility rules live here)
-  lib/actions/        server actions (all validate with zod and check permissions)
+  lib/actions/        server actions (zod-validated, permission-checked)
   lib/scoring/        pure scoring math + tests
-  lib/drills/         fact bank + round generation
 scripts/              migrate.ts, seed.ts
-drizzle/              SQL migrations (generate with `npm run db:generate` after editing the schema)
+drizzle/              SQL migrations (`npm run db:generate` after editing the schema)
 ```
 
 ## Scripts
@@ -103,12 +94,8 @@ drizzle/              SQL migrations (generate with `npm run db:generate` after 
 | `npm run db:seed` | demo data (refuses to touch `DATABASE_URL` without `--force`) |
 | `npm run db:reset` | wipe the local PGlite database |
 
-## Ideas for next iterations
+## Ideas
 
-- **Recurring questions** ("Will I be asleep by midnight?" every day) — the fastest way to build a big personal sample.
-- **Reminders** when questions close (email, Discord or Telegram bot), and a weekly group digest.
-- **Multiple-choice questions** and a draw-your-distribution input.
-- **Import from Fatebook** (it has an API) so existing history counts.
-- **Group-contributed drill facts**, and drills built from your own resolved questions ("guess what you guessed").
-- **Early-vs-late fairness** in relative scores (people who forecast later know more).
-- OAuth / magic-link login, login rate limiting, PWA install.
+- Recurring questions ("asleep by midnight?" every day).
+- Reminders when your predictions come due (email or a Discord bot).
+- Multiple-choice questions; importing Fatebook history.

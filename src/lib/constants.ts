@@ -1,5 +1,5 @@
 export const APP_NAME = "Reckon";
-export const APP_TAGLINE = "A calibration gym for friends";
+export const APP_TAGLINE = "Predictions with friends";
 
 export const CONFIDENCE_LEVELS = [0.5, 0.8, 0.9, 0.95] as const;
 export const DEFAULT_CONFIDENCE = 0.8;
