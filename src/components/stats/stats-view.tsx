@@ -1,0 +1,246 @@
+import Link from "next/link";
+import { CalibrationChart, CalibrationTable } from "@/components/charts/calibration-chart";
+import { DataTable, Figure } from "@/components/charts/chart-kit";
+import { CoverageBars } from "@/components/charts/coverage-bars";
+import { PitHistogram } from "@/components/charts/pit-histogram";
+import { TrendChart } from "@/components/charts/trend-chart";
+import { Card, EmptyState, SectionHeader, Stat } from "@/components/ui";
+import type { DrillSummary } from "@/lib/data/drills";
+import { fmtRatio, pct } from "@/lib/format";
+import { MIN_FOR_VERDICT, recalibrate, yesBias } from "@/lib/scoring/binary";
+import { brierTrend, hitRateTrend, multiplierTrend, summarize, type ScoredRecord } from "@/lib/scoring/records";
+import { VERDICT_COPY } from "@/lib/verdicts";
+
+export function StatsView({ records, drills, self, tz }: { records: ScoredRecord[]; drills: DrillSummary | null; self: boolean; tz: string }) {
+  const s = summarize(records);
+  const you = self ? "you" : "they";
+  const your = self ? "your" : "their";
+  if (s.counts.total === 0 && !drills?.total) {
+    return (
+      <EmptyState title="No resolved predictions yet">
+        {self
+          ? "Stats appear as your predictions resolve. Quick wins: time a task tonight, or do a calibration drill."
+          : "Nothing resolved that you can see yet."}
+      </EmptyState>
+    );
+  }
+
+  const b = s.binary;
+  const c = s.continuous;
+  const dur = s.byType.duration;
+  const bt = brierTrend(records);
+  const ht = hitRateTrend(records);
+  const mt = multiplierTrend(records);
+  const bias = b ? yesBias(b.fit) : null;
+
+  return (
+    <div className="space-y-10">
+      <Card className="grid grid-cols-2 gap-x-6 gap-y-5 p-5 sm:grid-cols-3 lg:grid-cols-5">
+        <Stat label="Resolved" value={s.counts.total} sub={`${s.counts.binary} yes/no · ${s.counts.continuous} ranges`} />
+        <Stat label="Brier score" value={b ? b.brier.toFixed(3) : "–"} sub={b ? "0 is perfect · 0.25 = always 50%" : "no yes/no questions yet"} />
+        <Stat
+          label="Confidence"
+          value={<span className="text-xl leading-tight">{b ? VERDICT_COPY[b.verdict].short : "–"}</span>}
+          sub={b && b.n < MIN_FOR_VERDICT ? `needs ${MIN_FOR_VERDICT}+ resolved` : "from your yes/no forecasts"}
+        />
+        <Stat label="Ranges that caught it" value={c ? pct(c.hitRate) : "–"} sub={c ? `aiming for ${pct(c.targetRate)}` : "no range questions yet"} />
+        <Stat
+          label="Tasks take"
+          value={dur?.multiplier != null ? fmtRatio(dur.multiplier) : "–"}
+          sub={dur?.multiplier != null ? `${your} best guess, on average` : "time a task to find out"}
+        />
+      </Card>
+
+      {b && (
+        <section>
+          <SectionHeader title="Yes / no questions" subtitle={`${Math.round(b.n)} resolved · ${pct(b.meanP)} average forecast · ${pct(b.baseRate)} actually happened`} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Figure
+              title="Calibration"
+              subtitle="Dots on the diagonal = your probabilities mean what they say"
+              table={<CalibrationTable bins={b.bins} />}
+            >
+              <CalibrationChart bins={b.bins} />
+            </Figure>
+            <div className="space-y-4">
+              <Card className="p-5">
+                <div className="font-semibold text-ink">{VERDICT_COPY[b.verdict].short}</div>
+                <p className="mt-1 text-sm leading-relaxed text-ink-2">{VERDICT_COPY[b.verdict].long}</p>
+                {bias && (
+                  <p className="mt-2 text-sm leading-relaxed text-ink-2">
+                    {bias === "optimistic"
+                      ? `Also: things happen less often than ${you} predict — a classic optimism lean. Check ${your} "Will I…?" questions.`
+                      : `Also: things happen more often than ${you} predict. ${self ? "You" : "They"} may be a bit pessimistic.`}
+                  </p>
+                )}
+                {b.n >= MIN_FOR_VERDICT && (
+                  <div className="mt-4">
+                    <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-3">What {your} numbers mean in practice</div>
+                    <DataTable
+                      head={[`When ${you} say`, "Reality (fitted)"]}
+                      rows={[0.6, 0.7, 0.8, 0.9, 0.95].map((p) => [pct(p), pct(recalibrate(p, b.fit))])}
+                    />
+                  </div>
+                )}
+              </Card>
+              {bt.length >= 5 && (
+                <Figure title="Brier score over time" subtitle="Rolling average of the last 10 resolved (lower is better)">
+                  <TrendChart points={bt} domain={[0, 0.5]} fmt="score" target={0.25} targetLabel="always 50%" valueLabel="Brier" tz={tz} />
+                </Figure>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {c && (
+        <section>
+          <SectionHeader title="Ranges" subtitle={`${Math.round(c.n)} resolved · how long, how much, when`} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="space-y-4">
+              <Figure title="Did reality land inside the range?" subtitle="Fill = hit rate, black tick = target, grey whisker = 90% range">
+                <CoverageBars levels={c.byLevel} />
+              </Figure>
+              <Card className="space-y-2 p-5 text-sm leading-relaxed text-ink-2">
+                <div className="font-semibold text-ink">Reading it</div>
+                <p>
+                  Reality came in <b className="text-ink">above</b> {your} best guess <b className="text-ink">{pct(c.aboveMedian)}</b> of the time
+                  {Math.abs(c.aboveMedian - 0.5) < 0.1 ? " — nicely balanced." : c.aboveMedian > 0.5 ? ` — ${you} tend to guess low.` : ` — ${you} tend to guess high.`}
+                </p>
+                {c.adjustment.spread > 1.2 && (
+                  <p>
+                    Outcomes scatter about <b className="text-ink">{c.adjustment.spread.toFixed(1)}×</b> as widely as {your} ranges imply — widen them.
+                  </p>
+                )}
+                {c.adjustment.spread < 0.8 && c.n >= 5 && (
+                  <p>
+                    {self ? "Your" : "Their"} ranges are wider than they need to be (outcomes cluster tighter than stated). {self ? "You" : "They"} can afford to commit.
+                  </p>
+                )}
+              </Card>
+            </div>
+            <Figure
+              title="Where reality landed"
+              subtitle="Percentile of the outcome within each forecast (flat = calibrated)"
+              table={
+                <DataTable
+                  head={["Percentile of your forecast", "Share of outcomes", "Count"]}
+                  rows={c.pit.map((p, i) => [`${i * 10}–${i * 10 + 10}th`, pct(p), Math.round(c.pitCounts[i] * 10) / 10])}
+                />
+              }
+              footer="Tall outer bars mean reality often escaped your ranges (too narrow). A lopsided shape means a consistent bias."
+            >
+              <PitHistogram pit={c.pit} counts={c.pitCounts} />
+            </Figure>
+          </div>
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            {dur && mt.length >= 3 && (
+              <Figure
+                title="Planning fallacy tracker"
+                subtitle={`Actual ÷ best guess for timed tasks, rolling (1× = spot on)`}
+                footer={
+                  dur.multiplier != null && (
+                    <>
+                      Overall, tasks take <b className="text-ink">{fmtRatio(dur.multiplier)}</b> {your} best guess; {pct(dur.hitRate)} of{" "}
+                      {your} time ranges caught the real duration.
+                    </>
+                  )
+                }
+              >
+                <TrendChart points={mt} domain={[0.5, 4]} log fmt="ratio" target={1} targetLabel="spot on" valueLabel="Actual ÷ guess" tz={tz} />
+              </Figure>
+            )}
+            {ht.length >= 5 && (
+              <Figure title="Range hit rate over time" subtitle="Rolling average of the last 10 resolved range questions">
+                <TrendChart points={ht} domain={[0, 1]} fmt="pct" target={c.targetRate} targetLabel={`target ${pct(c.targetRate)}`} valueLabel="Hit" tz={tz} />
+              </Figure>
+            )}
+          </div>
+        </section>
+      )}
+
+      {s.tags.length > 0 && (
+        <section>
+          <SectionHeader title="By tag" subtitle={`Per-tag base rates — the outside view ${you} can bring to the next forecast`} />
+          <Card className="overflow-x-auto p-0">
+            <table className="w-full text-sm tnum">
+              <thead>
+                <tr className="border-b border-line text-left text-xs text-ink-3">
+                  <th className="px-4 py-2 font-medium">Tag</th>
+                  <th className="px-4 py-2 font-medium">Yes/no</th>
+                  <th className="px-4 py-2 font-medium">Avg forecast</th>
+                  <th className="px-4 py-2 font-medium">Happened</th>
+                  <th className="px-4 py-2 font-medium">Ranges</th>
+                  <th className="px-4 py-2 font-medium">Caught</th>
+                  <th className="px-4 py-2 font-medium">Actual ÷ guess</th>
+                </tr>
+              </thead>
+              <tbody>
+                {s.tags.slice(0, 20).map((t) => {
+                  const gap = t.binary ? t.binary.meanP - t.binary.freq : 0;
+                  return (
+                    <tr key={t.tag} className="border-b border-line/60 last:border-0">
+                      <td className="px-4 py-2">
+                        <Link href={`/questions?tag=${encodeURIComponent(t.tag)}&status=resolved`} className="font-medium text-ink hover:underline">
+                          #{t.tag}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-2 text-ink-2">{t.binary?.n ?? "–"}</td>
+                      <td className="px-4 py-2 text-ink-2">{t.binary ? pct(t.binary.meanP) : "–"}</td>
+                      <td className={t.binary && Math.abs(gap) >= 0.15 && t.binary.n >= 4 ? "px-4 py-2 font-semibold text-bad-ink" : "px-4 py-2 text-ink-2"}>
+                        {t.binary ? pct(t.binary.freq) : "–"}
+                      </td>
+                      <td className="px-4 py-2 text-ink-2">{t.continuous?.n ?? "–"}</td>
+                      <td className="px-4 py-2 text-ink-2">
+                        {t.continuous ? `${pct(t.continuous.hitRate)} / ${pct(t.continuous.targetRate)}` : "–"}
+                      </td>
+                      <td className="px-4 py-2 text-ink-2">{t.continuous?.multiplier != null ? fmtRatio(t.continuous.multiplier) : "–"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </Card>
+          <p className="mt-2 text-xs text-ink-3">Red = forecasts and outcomes differ by 15+ points on 4+ questions.</p>
+        </section>
+      )}
+
+      {drills && drills.total > 0 && (
+        <section>
+          <SectionHeader
+            title="Calibration drills"
+            subtitle={`${drills.total} answered over ${drills.rounds} rounds`}
+            action={
+              self && (
+                <Link href="/drills" className="text-sm font-medium text-accent-ink hover:underline">
+                  Practice →
+                </Link>
+              )
+            }
+          />
+          <div className="grid gap-4 lg:grid-cols-2">
+            {drills.byLevel.length > 0 && (
+              <Figure title="Trivia ranges" subtitle="How often the true answer landed inside the range">
+                <CoverageBars levels={drills.byLevel} />
+                {drills.recentHitRate != null && (
+                  <p className="mt-3 text-sm text-ink-2">
+                    Last 50: <b className="text-ink">{pct(drills.recentHitRate)}</b> vs. {pct(drills.intervalHitRate)} all-time.
+                  </p>
+                )}
+              </Figure>
+            )}
+            {drills.compare && (
+              <Figure
+                title="Which-is-bigger calibration"
+                subtitle={`${drills.compareN} comparisons · Brier ${drills.compare.brier.toFixed(3)}`}
+                table={<CalibrationTable bins={drills.compare.bins} />}
+              >
+                <CalibrationChart bins={drills.compare.bins} label="Drill comparison calibration" />
+              </Figure>
+            )}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}

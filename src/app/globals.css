@@ -1,0 +1,339 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Surfaces are warm paper in light mode, near-black in dark mode.
+ * Chart series colors come from a CVD-validated categorical palette (validated
+ * against these exact surfaces); each mode has its own stepped values.
+ */
+:root {
+  color-scheme: light;
+  --bg: #f6f5f1;
+  --surface: #fdfdfb;
+  --surface-2: #f0efea;
+  --surface-3: #e8e6df;
+  --border: rgba(22, 21, 15, 0.1);
+  --border-strong: rgba(22, 21, 15, 0.2);
+  --ink: #16150f;
+  --ink-2: #52514e;
+  --ink-3: #77756f;
+  --accent: #2a78d6;
+  --accent-ink: #1c5cab;
+  --accent-soft: rgba(42, 120, 214, 0.1);
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --good: #0ca30c;
+  --good-ink: #006300;
+  --good-soft: rgba(12, 163, 12, 0.1);
+  --bad: #d03b3b;
+  --bad-ink: #b42323;
+  --bad-soft: rgba(208, 59, 59, 0.1);
+  --warn: #fab219;
+  --warn-soft: rgba(250, 178, 25, 0.16);
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --series-5: #e87ba4;
+  --series-6: #008300;
+  --series-7: #4a3aa7;
+  --series-8: #e34948;
+  --shadow: 0 1px 2px rgba(22, 21, 15, 0.04), 0 4px 16px -8px rgba(22, 21, 15, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f0f0e;
+    --surface: #1a1a19;
+    --surface-2: #232321;
+    --surface-3: #2c2c2a;
+    --border: rgba(255, 255, 255, 0.09);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --ink: #f4f3ee;
+    --ink-2: #c3c2b7;
+    --ink-3: #9d9b94;
+    --accent: #3987e5;
+    --accent-ink: #86b6ef;
+    --accent-soft: rgba(57, 135, 229, 0.16);
+    --grid: #2c2c2a;
+    --axis: #45443f;
+    --good-ink: #0ca30c;
+    --good-soft: rgba(12, 163, 12, 0.14);
+    --bad-ink: #e66767;
+    --bad-soft: rgba(230, 103, 103, 0.14);
+    --warn-soft: rgba(250, 178, 25, 0.14);
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f0f0e;
+  --surface: #1a1a19;
+  --surface-2: #232321;
+  --surface-3: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --ink: #f4f3ee;
+  --ink-2: #c3c2b7;
+  --ink-3: #9d9b94;
+  --accent: #3987e5;
+  --accent-ink: #86b6ef;
+  --accent-soft: rgba(57, 135, 229, 0.16);
+  --grid: #2c2c2a;
+  --axis: #45443f;
+  --good-ink: #0ca30c;
+  --good-soft: rgba(12, 163, 12, 0.14);
+  --bad-ink: #e66767;
+  --bad-soft: rgba(230, 103, 103, 0.14);
+  --warn-soft: rgba(250, 178, 25, 0.14);
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #9085e9;
+  --series-8: #e66767;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--good);
+  --color-good-ink: var(--good-ink);
+  --color-good-soft: var(--good-soft);
+  --color-bad: var(--bad);
+  --color-bad-ink: var(--bad-ink);
+  --color-bad-soft: var(--bad-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/*
+ * Component classes live in the components layer so Tailwind utilities
+ * (w-auto, py-1, pr-7, …) can still override them.
+ */
+@layer components {
+  /* Numbers that line up in columns */
+  .tnum {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Form controls */
+  .field {
+    width: 100%;
+    border-radius: 0.625rem;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 0.55rem 0.75rem;
+    font-size: 0.9375rem;
+    line-height: 1.4;
+    transition:
+      border-color 0.15s,
+      box-shadow 0.15s;
+  }
+  .field::placeholder {
+    color: var(--ink-3);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  .field:disabled {
+    opacity: 0.6;
+  }
+  select.field {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2377756f' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+  }
+  input[type="number"].field::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+
+  /* Probability slider */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 28px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--accent) var(--fill, 50%), var(--surface-3) var(--fill, 50%));
+  }
+  .range::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--surface-3);
+  }
+  .range::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  }
+  .range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--surface);
+    border: 2px solid var(--accent);
+  }
+
+  /* Two-sided slider (drills): fills from the centre toward the thumb */
+  .range.range-bipolar::-webkit-slider-runnable-track {
+    background: linear-gradient(
+      to right,
+      var(--surface-3) var(--from),
+      var(--accent) var(--from),
+      var(--accent) var(--to),
+      var(--surface-3) var(--to)
+    );
+  }
+  .range.range-bipolar::-moz-range-track {
+    background: linear-gradient(
+      to right,
+      var(--surface-3) var(--from),
+      var(--accent) var(--from),
+      var(--accent) var(--to),
+      var(--surface-3) var(--to)
+    );
+  }
+  .range.range-bipolar::-moz-range-progress {
+    background: transparent;
+  }
+
+  /* Long-form reading (Learn page) */
+  .prose-reckon {
+    color: var(--ink-2);
+    line-height: 1.7;
+    font-size: 1rem;
+  }
+  .prose-reckon h2 {
+    font-family: var(--font-serif);
+    color: var(--ink);
+    font-size: 1.9rem;
+    line-height: 1.15;
+    margin: 2.75rem 0 0.75rem;
+  }
+  .prose-reckon h3 {
+    color: var(--ink);
+    font-weight: 600;
+    font-size: 1.05rem;
+    margin: 1.75rem 0 0.4rem;
+  }
+  .prose-reckon p {
+    margin: 0.75rem 0;
+  }
+  .prose-reckon ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+    margin: 0.75rem 0;
+  }
+  .prose-reckon ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+    margin: 0.75rem 0;
+  }
+  .prose-reckon li {
+    margin: 0.35rem 0;
+  }
+  .prose-reckon strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .prose-reckon a {
+    color: var(--accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .prose-reckon code {
+    font-family: var(--font-mono);
+    font-size: 0.875em;
+    background: var(--surface-2);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse-dot {
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot {
+    animation: none;
+  }
+}
