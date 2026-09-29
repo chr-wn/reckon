@@ -185,7 +185,7 @@ export function EditQuestion({
         <textarea id="e-title" rows={2} value={title} onChange={(e) => setTitle(e.target.value)} className="field field-sizing-content resize-y" />
       </div>
       <div>
-        <Label htmlFor="e-details">Details</Label>
+        <Label htmlFor="e-details">Notes</Label>
         <textarea id="e-details" rows={2} value={details} onChange={(e) => setDetails(e.target.value)} className="field field-sizing-content min-h-16 resize-y text-sm" />
       </div>
       <div>

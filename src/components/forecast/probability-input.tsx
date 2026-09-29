@@ -52,12 +52,14 @@ export function ProbabilityInput({
             setText(String(v));
             onChange(v / 100);
           }}
+          data-flow-from=""
           className={cn("range flex-1", value == null && "opacity-50")}
           style={{ "--fill": `${pctVal}%` } as CSSProperties}
         />
         <div className="relative w-[5.5rem] shrink-0">
           <input
             id={id}
+            data-flow=""
             inputMode="decimal"
             autoComplete="off"
             placeholder="–"

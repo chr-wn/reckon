@@ -6,6 +6,7 @@ import { IntervalPreview } from "@/components/forecast/interval-preview";
 import { ProbabilityInput } from "@/components/forecast/probability-input";
 import { IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
 import { EMPTY_DRAFT, parseDraft, toDraft, type ContinuousKind, type QuantileDraft } from "@/components/forecast/quantiles";
+import { KeyboardFlow } from "@/components/keyboard-flow";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { submitForecast } from "@/lib/actions/questions";
 import { DURATION_UNITS, type DurationUnit } from "@/lib/constants";
@@ -51,6 +52,7 @@ export function ForecastForm({
   const isUpdate = latest != null;
 
   function submit() {
+    if (pending) return;
     setError(null);
     setSaved(false);
     let input;
@@ -71,6 +73,7 @@ export function ForecastForm({
 
   return (
     <Card className="p-4 sm:p-5">
+      <KeyboardFlow onSubmit={submit}>
       <div className="mb-4">
         <h2 className="font-semibold text-ink">{isUpdate ? "Update your forecast" : "Your forecast"}</h2>
         {!isUpdate && othersCount > 0 && (
@@ -114,6 +117,7 @@ export function ForecastForm({
           </>
         )}
         <textarea
+          data-flow=""
           rows={1}
           value={note}
           onChange={(e) => setNote(e.target.value)}
@@ -124,11 +128,12 @@ export function ForecastForm({
         <ErrorText>{error}</ErrorText>
         <div className="flex items-center justify-end gap-3">
           {saved && <span className="text-sm text-good-ink">Saved ✓</span>}
-          <Button onClick={submit} disabled={pending}>
+          <Button data-flow-end="" onClick={submit} disabled={pending}>
             {pending ? "Saving…" : isUpdate ? "Update forecast" : "Submit forecast"}
           </Button>
         </div>
       </div>
+      </KeyboardFlow>
     </Card>
   );
 }

@@ -44,6 +44,7 @@ export function QuantileInputs({
       <div className="relative">
         <input
           type={kind === "date" ? "date" : "text"}
+          data-flow=""
           inputMode={kind === "date" ? undefined : "decimal"}
           autoComplete="off"
           value={draft[key]}
