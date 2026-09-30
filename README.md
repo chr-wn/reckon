@@ -56,13 +56,20 @@ The composer guesses the type from the wording ("How long…", "When…", "Will�
 - **Time-weighting**: each forecast counts for as long as it stood; last-second updates don't help.
 - **Scoreboard**: resolved public predictions only; "±" is Brier minus the median of everyone else on the same questions.
 
-Tests: `npm test`.
+Tests: `npm test` (scoring, and the extension's Google Calendar parser).
 
 ### Visibility & sign-in
 
 - Predictions are **public** (every signed-in user can see and forecast) or **private** (author only); enforced in SQL (`visibleTo()` in `src/lib/data/questions.ts`) and re-checked in every server action.
-- Others' forecasts **and comments** are hidden until you forecast (or forecasting closes).
+- Others' forecasts are hidden until you forecast (or forecasting closes: resolved, past its resolve-by date, or the task timer started). You still see who forecast and when. Comments are always visible, so keep them spoiler-free.
+- Each question page has one **Activity** stream, oldest first: every forecast and update (with its reasoning), comments, and the resolution.
 - Google sign-in is a plain OAuth 2.0 + PKCE flow (`src/lib/auth/google.ts`, `src/app/auth/google/*`) feeding the app's own DB-backed sessions.
+
+### Chrome extension
+
+`extension/`: a keyboard-first composer you can open on any page (⌃⇧R), plus a Google Calendar hook that turns an event into “Will I finish ‹event› within ‹its length›?”. It reuses the web composer and posts through two JSON routes, `GET /api/me` and `POST /api/questions`, authenticated by the normal session cookie. See [extension/README.md](extension/README.md).
+
+The composer (web and extension) is keyboard-driven: ⌥Y / ⌥L / ⌥M / ⌥W pick the question type, ⌥1–5 a deadline, ⌥P visibility, ⌘↵ posts, ⌥/ lists the rest.
 
 ## Project layout
 
@@ -77,6 +84,8 @@ src/
   lib/data/           server-only queries (visibility rules live here)
   lib/actions/        server actions (zod-validated, permission-checked)
   lib/scoring/        pure scoring math + tests
+  app/api/            JSON routes for the Chrome extension
+extension/            Chrome extension (build with npm run ext:build)
 scripts/              migrate.ts, seed.ts
 drizzle/              SQL migrations (`npm run db:generate` after editing the schema)
 ```
@@ -93,6 +102,7 @@ drizzle/              SQL migrations (`npm run db:generate` after editing the sc
 | `npm run db:migrate:prod` | apply migrations using `.env.production.local` |
 | `npm run db:seed` | demo data (refuses to touch `DATABASE_URL` without `--force`) |
 | `npm run db:reset` | wipe the local PGlite database |
+| `npm run ext:build` / `npm run ext:zip` | build the Chrome extension into `extension/dist` / also zip it for the Web Store (`RECKON_URL=http://localhost:3000` to point it at a dev server) |
 
 ## Ideas
 

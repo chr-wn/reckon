@@ -65,6 +65,14 @@ export function ProbabilityInput({
             placeholder="–"
             value={text}
             onChange={(e) => fromText(e.target.value)}
+            onKeyDown={(e) => {
+              // ↑/↓ nudge by 1 point, with Shift by 5
+              if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+              e.preventDefault();
+              const step = (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 5 : 1);
+              fromText(String(Math.min(99, Math.max(1, Math.round(value == null ? 50 : value * 100) + step))));
+            }}
+            aria-keyshortcuts="ArrowUp ArrowDown Shift+ArrowUp Shift+ArrowDown"
             className="field pr-7 text-right text-lg font-semibold tnum"
           />
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-ink-3">%</span>

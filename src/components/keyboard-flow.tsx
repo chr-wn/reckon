@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
 /**
  * Keyboard-first forms:
@@ -8,15 +8,27 @@ import { useRef, type ReactNode } from "react";
  *   Shift+Enter  → left alone (newline in textareas)
  *   ⌘/Ctrl+Enter → submit, from any field
  * `data-flow-from` marks controls (like sliders) that advance on Enter but aren't stops themselves.
+ * `onKeyDown` runs first (for extra shortcuts); calling preventDefault skips the handling above.
  */
-export function KeyboardFlow({ onSubmit, children, className }: { onSubmit: () => void; children: ReactNode; className?: string }) {
+export function KeyboardFlow({
+  onSubmit,
+  onKeyDown,
+  children,
+  className,
+}: {
+  onSubmit: () => void;
+  onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
+  children: ReactNode;
+  className?: string;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   return (
     <div
       ref={ref}
       className={className}
       onKeyDown={(e) => {
-        if (e.key !== "Enter" || e.nativeEvent.isComposing) return;
+        onKeyDown?.(e);
+        if (e.defaultPrevented || e.key !== "Enter" || e.nativeEvent.isComposing) return;
         if (e.metaKey || e.ctrlKey) {
           e.preventDefault();
           onSubmit();

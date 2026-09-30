@@ -14,7 +14,9 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:migrate:prod": "NODE_ENV=production tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:reset": "rm -rf .data/pglite && npm run db:migrate"
+    "db:reset": "rm -rf .data/pglite && npm run db:migrate",
+    "ext:build": "node extension/build.mjs",
+    "ext:zip": "node extension/build.mjs --zip"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -30,12 +32,15 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/chrome": "^0.3.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "^0.25.12",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "postcss": "^8.5.28",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5",

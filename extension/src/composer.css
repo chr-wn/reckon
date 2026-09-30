@@ -1,0 +1,16 @@
+@import "../../src/app/globals.css";
+@source "../../src/components";
+@source "./";
+
+/* next/font isn't available outside Next.js: use the system faces */
+:root {
+  --font-geist-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-geist-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-instrument-serif: "Iowan Old Style", ui-serif, Georgia, serif;
+}
+
+/* In the in-page overlay the page shows through around the card. */
+html.overlay,
+html.overlay body {
+  background: transparent;
+}

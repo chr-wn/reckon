@@ -151,12 +151,13 @@ export interface CommentView {
 export interface QuestionDetail {
   question: Question & { author: UserLite };
   isAuthor: boolean;
-  /** Others' forecasts and comments stay hidden until you've forecast (or it resolves), to avoid anchoring. */
+  /** Others' forecasts stay hidden until you've forecast (or forecasting closes), to avoid anchoring. Comments are always shown. */
   revealed: boolean;
   forecasts: ForecastView[];
+  /** Others' forecasts while they're hidden: who and when, never the numbers or notes. */
+  hiddenForecasts: { id: string; createdAt: Date; user: UserLite }[];
   forecasterCount: number;
   comments: CommentView[];
-  commentCount: number;
   records: ScoredRecord[];
 }
 
@@ -190,9 +191,9 @@ export async function getQuestionDetail(id: string, viewerId: string): Promise<Q
     isAuthor: row.authorId === viewerId,
     revealed,
     forecasts: visible,
+    hiddenForecasts: revealed ? [] : views.filter((f) => f.userId !== viewerId).map((f) => ({ id: f.id, createdAt: f.createdAt, user: f.user })),
     forecasterCount: new Set(views.map((f) => f.userId)).size,
-    comments: revealed ? cs : [],
-    commentCount: cs.length,
+    comments: cs,
     records: row.resolvedAt ? scoreQuestion(row, visible) : [],
   };
 }

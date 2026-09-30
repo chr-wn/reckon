@@ -1,6 +1,6 @@
 import { ArrowRight, Lock } from "lucide-react";
 import Link from "next/link";
-import type { QuestionRow } from "@/lib/data/questions";
+import { isOpenForForecasts, type QuestionRow } from "@/lib/data/questions";
 import { fmtDate, fmtValue, pct, relativeTime } from "@/lib/format";
 import { Avatar, cn } from "../ui";
 import { ForecastSummary, OutcomeBadge, RecordBadge, TypeIcon } from "./bits";
@@ -81,10 +81,12 @@ export function QuestionListItem({ q, viewerId, tz, now, trailing }: { q: Questi
           </>
         ) : q.myForecast ? (
           <ForecastSummary q={q} f={q.myForecast} tz={tz} />
-        ) : (
+        ) : isOpenForForecasts(q, now) ? (
           <Link href={`/q/${q.id}`} className="inline-flex items-center gap-1 font-medium text-accent-ink">
             Forecast <ArrowRight size={14} />
           </Link>
+        ) : (
+          <span className="text-xs text-ink-3">Forecasting closed</span>
         )}
         {!q.resolvedAt && <OthersSummary q={q} tz={tz} />}
         {trailing}

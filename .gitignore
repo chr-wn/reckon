@@ -43,3 +43,10 @@ next-env.d.ts
 
 # local embedded database (PGlite)
 /.data/
+
+# one-off local checks (screenshots, scratch scripts)
+/.sanity/
+
+# Chrome extension build output and store zips
+/extension/dist/
+/extension/*.zip

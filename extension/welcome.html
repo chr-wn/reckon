@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reckon for Chrome</title>
+    <link rel="stylesheet" href="composer.css" />
+  </head>
+  <body class="antialiased">
+    <main class="mx-auto max-w-xl px-5 py-14">
+      <h1 class="font-serif text-[2.6rem] leading-tight text-ink">Reckon for Chrome</h1>
+      <p class="mt-2 text-ink-2">Make a prediction from any page without leaving it.</p>
+      <ol class="mt-8 space-y-5 text-[0.9375rem] text-ink-2">
+        <li>
+          <b class="text-ink">Press <kbd id="shortcut" class="rounded-md border border-line-strong px-1.5 py-0.5 font-sans text-sm">…</kbd></b>
+          (or click the toolbar icon). Type the question, <kbd class="font-sans">↵</kbd> to the probability, <kbd class="font-sans">⌘↵</kbd> to post.
+          The link is copied so you can paste it anywhere.
+          <button id="change" class="ml-1 text-accent-ink underline underline-offset-2">Change the shortcut</button>
+        </li>
+        <li>
+          <b class="text-ink">⌥Y ⌥L ⌥M ⌥W</b> switch between yes/no, how long, how much and when. <b class="text-ink">⌥/</b> lists every shortcut.
+        </li>
+        <li>
+          <b class="text-ink">Google Calendar:</b> open an event and press <kbd class="font-sans">F</kbd> (or click the Reckon row). You get
+          “Will I finish &lt;event&gt; within &lt;its length&gt;?”, due when the block ends; just type your probability.
+        </li>
+        <li id="account">Checking your Reckon sign-in…</li>
+      </ol>
+    </main>
+    <script src="welcome.js"></script>
+  </body>
+</html>

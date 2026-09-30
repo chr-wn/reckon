@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { IntervalStrip, type StripRow } from "@/components/charts/interval-strip";
 import { ProbabilityTimeline } from "@/components/charts/probability-timeline";
 import { DeleteQuestionButton, EditQuestion, ReflectionForm, ResolvePanel, UnresolveButton } from "@/components/question/author-tools";
-import { Comments } from "@/components/question/comments";
+import { Activity } from "@/components/question/activity";
 import { ForecastForm } from "@/components/question/forecast-form";
 import { ForecastSummary, OutcomeBadge, RecordBadge, TypeIcon } from "@/components/questions/bits";
 import { TimerCard } from "@/components/questions/timer-card";
@@ -225,21 +225,6 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
                 ) : (
                   <IntervalStrip rows={stripRows} actual={q.resolution === "value" ? q.resolutionValue : null} scaleType={scale} q={q} tz={tz} />
                 )}
-                <ul className="divide-y divide-line border-t border-line">
-                  {[...detail.forecasts].reverse().map((f) => (
-                    <li key={f.id} className="flex items-start gap-3 py-2.5 text-sm">
-                      <Avatar name={f.user.displayName} src={f.user.avatarUrl} size={24} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="font-medium text-ink">{nameOf(f)}</span>
-                          <ForecastSummary q={q} f={f} tz={tz} />
-                          <span className="text-xs text-ink-3">{relativeTime(f.createdAt, now)}</span>
-                        </div>
-                        {f.note && <p className="mt-0.5 whitespace-pre-wrap text-ink-2">{f.note}</p>}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               </Card>
             )}
           </section>
@@ -288,19 +273,16 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
           )}
 
           <section>
-            <SectionHeader title="Discussion" />
-            {revealed || detail.commentCount === 0 ? (
-              <Comments
-                questionId={q.id}
-                viewerId={user.id}
-                items={detail.comments.map((c) => ({ id: c.id, body: c.body, when: relativeTime(c.createdAt, now), user: c.user }))}
-              />
-            ) : (
-              <Card className="flex items-center gap-3 p-5 text-sm text-ink-2">
-                <Lock size={18} className="shrink-0 text-ink-3" />
-                {detail.commentCount} {detail.commentCount === 1 ? "comment" : "comments"} hidden until you forecast.
-              </Card>
-            )}
+            <SectionHeader title="Activity" subtitle="Forecasts, updates and comments, oldest first" />
+            <Activity
+              q={q}
+              forecasts={detail.forecasts}
+              hiddenForecasts={detail.hiddenForecasts}
+              comments={detail.comments}
+              viewerId={user.id}
+              tz={tz}
+              now={now}
+            />
           </section>
         </div>
 
