@@ -76,7 +76,10 @@ export interface ContinuousPoint {
 }
 
 export interface CoverageLevel {
+  /** weighted mean stated confidence of the forecasts in this band (the hit rate to aim for) */
   confidence: number;
+  /** "80%", or "65–85%" when the band mixes levels */
+  label: string;
   n: number;
   hitRate: number;
   ciLow: number;
@@ -103,24 +106,32 @@ export interface ContinuousSummary {
   adjustment: AdjustmentModel;
 }
 
+/**
+ * Coverage is reported per band of stated confidence, since confidence is a slider (73%, 77%, 82%…);
+ * the old fixed levels 50/80/90/95% each fall in their own band.
+ */
+const COVERAGE_BANDS: [number, number][] = [
+  [0, 0.65],
+  [0.65, 0.85],
+  [0.85, 0.925],
+  [0.925, 1],
+];
+
 export function summarizeContinuous(points: ContinuousPoint[]): ContinuousSummary | null {
   const n = sum(points.map((p) => p.w));
   if (n <= 0) return null;
 
-  const levels = new Map<number, { w: number; hits: number }>();
-  for (const p of points) {
-    const key = Math.round(p.confidence * 100) / 100;
-    const acc = levels.get(key) ?? { w: 0, hits: 0 };
-    acc.w += p.w;
-    acc.hits += p.w * p.hit;
-    levels.set(key, acc);
-  }
-  const byLevel = [...levels.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([confidence, { w, hits }]) => {
-      const [ciLow, ciHigh] = wilson(hits, w);
-      return { confidence, n: w, hitRate: hits / w, ciLow, ciHigh };
-    });
+  const byLevel = COVERAGE_BANDS.flatMap(([from, to]) => {
+    const inBand = points.filter((p) => p.confidence >= from && p.confidence < to);
+    const w = sum(inBand.map((p) => p.w));
+    if (w <= 0) return [];
+    const hits = sum(inBand.map((p) => p.w * p.hit));
+    const confidence = sum(inBand.map((p) => p.w * p.confidence)) / w;
+    const levels = new Set(inBand.map((p) => Math.round(p.confidence * 100)));
+    const label = levels.size === 1 ? `${[...levels][0]}%` : `${Math.round(Math.min(...inBand.map((p) => p.confidence)) * 100)}–${Math.round(Math.max(...inBand.map((p) => p.confidence)) * 100)}%`;
+    const [ciLow, ciHigh] = wilson(hits, w);
+    return [{ confidence, label, n: w, hitRate: hits / w, ciLow, ciHigh }];
+  });
 
   const pitCounts = Array(10).fill(0) as number[];
   for (const p of points) pitCounts[clamp(Math.floor(percentileFromZ(p.z) * 10), 0, 9)] += p.w;

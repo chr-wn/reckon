@@ -5,13 +5,13 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { BinaryNudge, ContinuousNudge } from "@/components/forecast/nudges";
 import { IntervalPreview } from "@/components/forecast/interval-preview";
 import { ProbabilityInput } from "@/components/forecast/probability-input";
-import { ConfidencePicker, DurationUnitSelect, IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
-import { EMPTY_DRAFT, parseDraft, toDraft, type QuantileDraft } from "@/components/forecast/quantiles";
+import { DurationUnitSelect, GuessOnlySentence, IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
+import { draftProblem, EMPTY_DRAFT, parseDraft, toDraft, type QuantileDraft } from "@/components/forecast/quantiles";
 import { KeyboardFlow } from "@/components/keyboard-flow";
 import { Button, Card, cn, ErrorText, Label } from "@/components/ui";
 import { VisibilityToggle, type Visibility } from "@/components/visibility-toggle";
 import type { ActionResult } from "@/lib/actions/questions";
-import { CONFIDENCE_LEVELS, DEFAULT_CONFIDENCE, DURATION_UNITS, TYPE_LABELS, type DurationUnit } from "@/lib/constants";
+import { DEFAULT_CONFIDENCE, DURATION_UNITS, TYPE_LABELS, type DurationUnit } from "@/lib/constants";
 import { fmtDate, relativeTime } from "@/lib/format";
 import { detectType } from "@/lib/ideas";
 import { deadlinePresets, fromDateTimeInput, parseDeadline, toDateTimeInput } from "@/lib/parse-date";
@@ -21,7 +21,7 @@ import { runAltShortcut, type Shortcut } from "@/lib/shortcuts";
 import { useHydrated } from "@/lib/use-hydrated";
 import type { CreateQuestionInput } from "@/lib/validation";
 
-type FocusTarget = "title" | "forecast" | "deadline" | "notes";
+type FocusTarget = "title" | "forecast" | "deadline" | "notes" | "confidence";
 
 /** Starting values, e.g. from a Google Calendar event in the Chrome extension. */
 export interface ComposerInitial {
@@ -62,6 +62,7 @@ const FOCUS_SELECTORS: Record<FocusTarget, string> = {
   forecast: "#q-probability, [data-quantile='low']",
   deadline: "#q-closes",
   notes: "#q-notes",
+  confidence: "#q-confidence",
 };
 
 function defaultDeadline(type: QType): Date | null {
@@ -158,6 +159,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
   const timed = type === "date" && withTime;
   const parsed = kind ? parseDraft(kind, draft, durUnit, timed, tz) : null;
   const quantiles = parsed?.quantiles ?? null;
+  const estimate = parsed?.estimate ?? null;
   const unitLabel = type === "numeric" ? numUnit : type === "duration" ? durUnit : timed ? "datetime" : null;
 
   /** "When" answers: switch between a day and a day + time, keeping what's typed. */
@@ -191,7 +193,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
     { code: "KeyP", label: "⌥P", description: "Public / only me", run: () => setVisibility((v) => (v === "public" ? "private" : "public")) },
     { code: "KeyO", label: "⌥O", description: "Notes", run: () => requestFocus("notes") },
     ...(kind
-      ? [{ code: "KeyC", label: "⌥C", description: "Range confidence (50/80/90/95%)", run: () => setConfidence((c) => next(CONFIDENCE_LEVELS, c as (typeof CONFIDENCE_LEVELS)[number])) }]
+      ? [{ code: "KeyC", label: "⌥C", description: "How sure (↑↓ to adjust)", run: () => requestFocus("confidence") }]
       : []),
     ...(type === "duration"
       ? [
@@ -215,8 +217,8 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
       if (probability == null) return setError("Pick a probability.");
       input = { ...common, type, probability };
     } else {
-      if (!quantiles) return setError(parsed?.error ?? "Fill in the low end, best guess and high end.");
-      const cont = { ...common, confidence, forecast: quantiles };
+      if (!estimate) return setError(draftProblem(parsed!));
+      const cont = { ...common, confidence, forecast: estimate };
       input =
         type === "duration"
           ? { ...cont, type, unit: durUnit, startTimer }
@@ -292,9 +294,19 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                  <span className="text-sm font-medium text-ink-2">How sure?</span>
-                  <ConfidencePicker value={confidence} onChange={setConfidence} />
+                <div>
+                  <span className="mb-1 block text-sm font-medium text-ink-2">
+                    How sure? <span className="font-normal text-ink-3">(that the answer lands between your low and high end · ⌥C)</span>
+                  </span>
+                  <ProbabilityInput
+                    id="q-confidence"
+                    label="How sure"
+                    value={confidence}
+                    onChange={(c) => c != null && setConfidence(c)}
+                    compact
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 empty:hidden">
                   {type === "duration" && <DurationUnitSelect value={durUnit} onChange={setDurUnit} />}
                   {type === "date" && (
                     <label className="flex items-center gap-1.5 text-sm text-ink-2" title="Answer with a time of day, not just a date (⌥T)">
@@ -323,11 +335,13 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
                 </div>
                 <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={confidence} unit={durUnit} numericUnit={numUnit} withTime={timed} />
                 {parsed?.error && <p className="text-sm text-bad-ink">{parsed.error}</p>}
-                {quantiles && (
+                {quantiles ? (
                   <div className="space-y-2 rounded-xl bg-surface-2/60 px-3 pb-2 pt-3">
                     <IntervalPreview kind={kind!} q={quantiles} confidence={confidence} scale={scale} unit={unitLabel} tz={tz} />
                     <IntervalSentence kind={kind!} q={quantiles} confidence={confidence} unit={unitLabel} tz={tz} />
                   </div>
+                ) : (
+                  estimate && <GuessOnlySentence kind={kind!} median={estimate.median} unit={unitLabel} tz={tz} />
                 )}
                 <ContinuousNudge
                   kind={kind!}

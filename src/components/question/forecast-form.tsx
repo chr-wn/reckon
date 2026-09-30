@@ -4,8 +4,8 @@ import { useState, useTransition } from "react";
 import { BinaryNudge, ContinuousNudge } from "@/components/forecast/nudges";
 import { IntervalPreview } from "@/components/forecast/interval-preview";
 import { ProbabilityInput } from "@/components/forecast/probability-input";
-import { IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
-import { EMPTY_DRAFT, parseDraft, toDraft, type ContinuousKind, type QuantileDraft } from "@/components/forecast/quantiles";
+import { GuessOnlySentence, IntervalSentence, QuantileInputs } from "@/components/forecast/quantile-inputs";
+import { draftProblem, EMPTY_DRAFT, parseDraft, toDraft, type ContinuousKind, type QuantileDraft } from "@/components/forecast/quantiles";
 import { KeyboardFlow } from "@/components/keyboard-flow";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { submitForecast } from "@/lib/actions/questions";
@@ -41,7 +41,7 @@ export function ForecastForm({
   const withTime = hasTimeOfDay(q);
   const [probability, setProbability] = useState<number | null>(latest?.probability ?? null);
   const [draft, setDraft] = useState<QuantileDraft>(() =>
-    kind && latest?.low != null && latest.median != null && latest.high != null
+    kind && latest?.median != null
       ? toDraft(kind, { low: latest.low, median: latest.median, high: latest.high }, durUnit, tz, withTime)
       : EMPTY_DRAFT,
   );
@@ -62,8 +62,8 @@ export function ForecastForm({
       if (probability == null) return setError("Pick a probability.");
       input = { probability, note };
     } else {
-      if (!parsed?.quantiles) return setError(parsed?.error ?? "Fill in the low end, best guess and high end.");
-      input = { forecast: parsed.quantiles, note };
+      if (!parsed?.estimate) return setError(draftProblem(parsed!));
+      input = { forecast: parsed.estimate, note };
     }
     start(async () => {
       const r = await submitForecast(q.id, input);
@@ -99,11 +99,13 @@ export function ForecastForm({
           <>
             <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={q.confidence} unit={durUnit} numericUnit={q.unit} withTime={withTime} />
             {parsed?.error && <p className="text-sm text-bad-ink">{parsed.error}</p>}
-            {parsed?.quantiles && (
+            {parsed?.quantiles ? (
               <div className="space-y-2 rounded-xl bg-surface-2/60 px-3 pb-2 pt-3">
                 <IntervalPreview kind={kind!} q={parsed.quantiles} confidence={q.confidence} scale={q.scale} unit={unitLabel} tz={tz} />
                 <IntervalSentence kind={kind!} q={parsed.quantiles} confidence={q.confidence} unit={unitLabel} tz={tz} />
               </div>
+            ) : (
+              parsed?.estimate && <GuessOnlySentence kind={kind!} median={parsed.estimate.median} unit={unitLabel} tz={tz} />
             )}
             <ContinuousNudge
               kind={kind!}

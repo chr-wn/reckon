@@ -1,17 +1,18 @@
 import { z } from "zod";
-import { CONFIDENCE_LEVELS, DURATION_UNITS } from "./constants";
+import { DURATION_UNITS } from "./constants";
 
 export const visibilitySchema = z.enum(["public", "private"]);
 
-const confidence = z
-  .number()
-  .refine((c) => CONFIDENCE_LEVELS.some((l) => Math.abs(l - c) < 1e-9), "Unsupported confidence level");
+/** How sure the range is: any 1%–99%, set with the same slider as yes/no probabilities. */
+const confidence = z.number().min(0.01, "Use 1%–99%").max(0.99, "Use 1%–99%");
 export const probabilitySchema = z.number().min(0.01, "Use 1%–99%").max(0.99, "Use 1%–99%");
 
+/** A best guess, with an optional range (both ends or neither). */
 export const quantilesSchema = z
-  .object({ low: z.number(), median: z.number(), high: z.number() })
-  .refine((q) => q.low <= q.median && q.median <= q.high, "Needs low ≤ best guess ≤ high")
-  .refine((q) => q.low < q.high, "Low and high can't be equal — give yourself a range");
+  .object({ low: z.number().nullable().default(null), median: z.number(), high: z.number().nullable().default(null) })
+  .refine((q) => (q.low == null) === (q.high == null), "Give both ends of the range, or leave both empty")
+  .refine((q) => q.low == null || q.high == null || (q.low <= q.median && q.median <= q.high), "Needs low ≤ best guess ≤ high")
+  .refine((q) => q.low == null || q.high == null || q.low < q.high, "Low and high can't be equal — give yourself a range");
 
 const common = {
   title: z.string().trim().min(3, "Question is too short").max(300),

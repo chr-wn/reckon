@@ -62,18 +62,19 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
   // Continuous: everyone's latest interval (+ a group aggregate when there's a crowd)
   const stripRows: StripRow[] = [];
   if (q.type !== "binary") {
-    const rows = latest.filter((f) => f.low != null && f.median != null && f.high != null);
+    const rows = latest.filter((f) => f.median != null);
     rows.sort((a, b) => (a.userId === user.id ? -1 : b.userId === user.id ? 1 : 0));
     for (const f of rows) {
-      stripRows.push({ key: f.id, name: nameOf(f), low: f.low!, median: f.median!, high: f.high!, emphasis: f.userId === user.id ? "you" : undefined });
+      stripRows.push({ key: f.id, name: nameOf(f), low: f.low, median: f.median!, high: f.high, emphasis: f.userId === user.id ? "you" : undefined });
     }
-    if (rows.length >= 3) {
+    const ranges = rows.filter((f) => f.low != null && f.high != null);
+    if (ranges.length >= 3) {
       stripRows.push({
         key: "group",
         name: "Group (median of each)",
-        low: median(rows.map((f) => f.low!)),
-        median: median(rows.map((f) => f.median!)),
-        high: median(rows.map((f) => f.high!)),
+        low: median(ranges.map((f) => f.low!)),
+        median: median(ranges.map((f) => f.median!)),
+        high: median(ranges.map((f) => f.high!)),
         emphasis: "group",
       });
     }
@@ -144,7 +145,13 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
                   <span className="text-2xl font-semibold text-ink">{q.resolution === "yes" ? "Yes" : q.resolution === "no" ? "No" : "Ambiguous"}</span>
                 )}
               </div>
-              {myRecord && <YourResult r={myRecord} q={q} tz={tz} relMean={rel.get(user.id)} />}
+              {myRecord ? (
+                <YourResult r={myRecord} q={q} tz={tz} relMean={rel.get(user.id)} />
+              ) : (
+                q.resolution === "value" &&
+                q.resolutionValue != null &&
+                myLatest?.median != null && <GuessOnlyResult guess={myLatest.median} actual={q.resolutionValue} q={q} tz={tz} />
+              )}
               {q.resolutionNote && !(isAuthor && sp.done) && (
                 <blockquote className="mt-4 border-l-2 border-line-strong pl-3 text-[0.9375rem] italic text-ink-2">{q.resolutionNote}</blockquote>
               )}
@@ -323,6 +330,23 @@ export default async function QuestionPage({ params, searchParams }: PageProps<"
           )}
         </aside>
       </div>
+    </div>
+  );
+}
+
+/** A best guess without a range isn't scored for calibration; just say how far off it was. */
+function GuessOnlyResult({ guess, actual, q, tz }: { guess: number; actual: number; q: { type: "binary" | "numeric" | "duration" | "date"; unit: string | null }; tz: string }) {
+  const ratio = q.type !== "date" && guess > 0 && actual > 0 ? actual / guess : null;
+  return (
+    <div className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-ink-2">
+      Your best guess was <b className="text-ink">{fmtValue(q, guess, tz)}</b>; it came in at <b className="text-ink">{fmtValue(q, actual, tz)}</b>
+      {ratio != null && Math.abs(Math.log(ratio)) > 0.01 && (
+        <>
+          {" "}
+          ({q.type === "duration" ? (ratio >= 1 ? `took ${fmtRatio(ratio)} your guess` : `${fmtRatio(1 / ratio)} quicker`) : `${fmtRatio(ratio)} your guess`})
+        </>
+      )}
+      . No range, so it isn&apos;t scored for calibration.
     </div>
   );
 }

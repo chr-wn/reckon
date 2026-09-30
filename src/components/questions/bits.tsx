@@ -19,20 +19,22 @@ export function TypeIcon({ type, className, size = 16 }: { type: Question["type"
 type ForecastLike = { probability?: number | null; low?: number | null; median?: number | null; high?: number | null };
 type QLike = Pick<Question, "type" | "unit">;
 
-/** "70%" or "30m – 1h 30m (~45m)" */
+/** "70%", "45m (30m–1h 30m)", or just "45m" for a best guess without a range */
 export function ForecastSummary({ q, f, tz, className }: { q: QLike; f: ForecastLike; tz: string; className?: string }) {
   if (q.type === "binary") {
     return <span className={cn("font-semibold tnum text-ink", className)}>{f.probability != null ? pct(f.probability) : "–"}</span>;
   }
-  if (f.low == null || f.median == null || f.high == null) return <span className={className}>–</span>;
+  if (f.median == null) return <span className={className}>–</span>;
   const v = (x: number) => fmtValue(q, x, tz);
   return (
     <span className={cn("tnum text-ink-2", className)}>
       <span className="font-semibold text-ink">{v(f.median)}</span>
-      <span className="text-ink-3">
-        {" "}
-        ({v(f.low)}–{v(f.high)})
-      </span>
+      {f.low != null && f.high != null && (
+        <span className="text-ink-3">
+          {" "}
+          ({v(f.low)}–{v(f.high)})
+        </span>
+      )}
     </span>
   );
 }

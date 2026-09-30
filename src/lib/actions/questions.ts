@@ -25,8 +25,8 @@ export type ActionResult<T = undefined> = { ok: true; data: T } | { ok: false; e
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 const refreshAll = () => revalidatePath("/", "layout");
 
-function checkQuantiles(type: Question["type"], scale: "linear" | "log", q: { low: number }): string | null {
-  if ((type === "duration" || scale === "log") && q.low <= 0) {
+function checkQuantiles(type: Question["type"], scale: "linear" | "log", q: { low: number | null; median: number }): string | null {
+  if ((type === "duration" || scale === "log") && (q.median <= 0 || (q.low != null && q.low <= 0))) {
     return type === "duration" ? "Durations must be greater than zero." : "Log-scale questions need positive values.";
   }
   return null;

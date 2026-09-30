@@ -12,15 +12,15 @@ export function CoverageBars({ levels }: { levels: CoverageLevel[] }) {
         const off = l.hitRate - l.confidence;
         const verdict = l.ciHigh < l.confidence ? "too narrow" : l.ciLow > l.confidence ? "too wide" : "on target";
         return (
-          <div key={l.confidence}>
+          <div key={l.label}>
             <div className="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-medium text-ink">{pct(l.confidence)} intervals</span>
+              <span className="font-medium text-ink">{l.label} intervals</span>
               <span className="tnum text-ink-2">
                 <span className="font-semibold text-ink">{pct(l.hitRate)}</span> caught · n={Math.round(l.n)} ·{" "}
                 <span className={verdict === "on target" ? "text-good-ink" : "text-bad-ink"}>{verdict}</span>
               </span>
             </div>
-            <div className="relative h-3 rounded-full bg-surface-3" role="img" aria-label={`${pct(l.hitRate)} of ${pct(l.confidence)} intervals contained the answer`}>
+            <div className="relative h-3 rounded-full bg-surface-3" role="img" aria-label={`${pct(l.hitRate)} of ${l.label} intervals contained the answer`}>
               <div className="absolute inset-y-0 left-0 rounded-full bg-[var(--series-1)]" style={{ width: `${Math.max(1.5, l.hitRate * 100)}%` }} />
               <div
                 className="absolute top-1/2 h-[3px] -translate-y-1/2 rounded-full bg-ink/30"
@@ -31,7 +31,7 @@ export function CoverageBars({ levels }: { levels: CoverageLevel[] }) {
             {Math.abs(off) >= 0.1 && (
               <p className="mt-1 text-xs text-ink-3">
                 {off < 0
-                  ? `Reality escaped your ${pct(l.confidence)} ranges ${pct(1 - l.hitRate)} of the time instead of ${pct(1 - l.confidence)}.`
+                  ? `Reality escaped your ${l.label} ranges ${pct(1 - l.hitRate)} of the time instead of ${pct(1 - l.confidence)}.`
                   : `Your ranges could be tighter — they caught more than they claimed.`}
               </p>
             )}

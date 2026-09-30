@@ -5,6 +5,15 @@ import type { Quantiles } from "@/lib/scoring/continuous";
 
 export type ContinuousKind = "numeric" | "duration" | "date";
 
+/** A best guess, optionally with a range around it (both ends or neither). */
+export interface Estimate {
+  low: number | null;
+  median: number;
+  high: number | null;
+}
+
+export const hasRange = (e: { low: number | null; high: number | null }): e is Quantiles => e.low != null && e.high != null;
+
 /** What the user has typed: strings, so half-typed values don't get clobbered. */
 export interface QuantileDraft {
   low: string;
@@ -76,15 +85,24 @@ export function parseDraft(kind: ContinuousKind, d: QuantileDraft, unit: Duratio
   const low = parseOne(kind, d.low, unit, withTime, tz);
   const median = parseOne(kind, d.median, unit, withTime, tz);
   const high = parseOne(kind, d.high, unit, withTime, tz);
-  const complete = low != null && median != null && high != null;
+  const range = low != null && high != null;
   let error: string | null = null;
-  if (complete) {
+  if (median != null && range) {
     if (!(low <= median && median <= high)) error = "Order should be low ≤ best guess ≤ high.";
     else if (low >= high) error = "Give yourself a range — low and high can't be equal.";
-    else if (kind === "duration" && low <= 0) error = "Durations must be more than zero.";
   }
-  const quantiles: Quantiles | null = complete && !error ? { low, median, high } : null;
-  return { quantiles, error, partial: { low, median, high } };
+  if (!error && kind === "duration" && median != null && (median <= 0 || (range && low <= 0))) error = "Durations must be more than zero.";
+  // one end without the other isn't an estimate yet (it's mid-typing, or needs its partner)
+  const estimate: Estimate | null = median != null && !error && (range || (low == null && high == null)) ? { low, median, high } : null;
+  const quantiles: Quantiles | null = estimate && hasRange(estimate) ? estimate : null;
+  return { estimate, quantiles, error, partial: { low, median, high } };
+}
+
+/** Why a draft can't be submitted yet. */
+export function draftProblem(parsed: ReturnType<typeof parseDraft>): string {
+  if (parsed.error) return parsed.error;
+  if (parsed.partial.median == null) return "Give at least a best guess.";
+  return "Give both ends of the range, or leave both empty.";
 }
 
 const trimNum = (x: number) => {
@@ -92,8 +110,16 @@ const trimNum = (x: number) => {
   return String(r);
 };
 
-export function toDraft(kind: ContinuousKind, q: Quantiles, unit: DurationUnit = "minutes", tz?: string, withTime = false): QuantileDraft {
-  const one = (v: number) =>
-    kind === "date" ? (withTime ? toDateTimeLocal(v, tz) : toDateInput(v, tz)) : kind === "duration" ? trimNum(fromMinutes(v, unit)) : trimNum(v);
+export function toDraft(kind: ContinuousKind, q: Estimate, unit: DurationUnit = "minutes", tz?: string, withTime = false): QuantileDraft {
+  const one = (v: number | null) =>
+    v == null
+      ? ""
+      : kind === "date"
+        ? withTime
+          ? toDateTimeLocal(v, tz)
+          : toDateInput(v, tz)
+        : kind === "duration"
+          ? trimNum(fromMinutes(v, unit))
+          : trimNum(v);
   return { low: one(q.low), median: one(q.median), high: one(q.high) };
 }

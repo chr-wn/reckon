@@ -43,16 +43,16 @@ Reckon talks to Postgres directly and has its own sessions, so from Supabase you
 | Type | Forecast | Stored as |
 |---|---|---|
 | `binary` | probability, 1–99% | `forecasts.probability` |
-| `duration` | low / best guess / high at the question's confidence (default 80%), optional task timer | minutes; always log scale |
-| `numeric` | low / best guess / high | raw numbers; linear or log scale |
-| `date` | low / best guess / high, optionally with a time of day | epoch ms (local noon for a day; `unit = "datetime"` when times are used) |
+| `duration` | best guess, optionally a low / high range at the question's confidence (a 1–99% slider, default 80%), optional task timer | minutes; always log scale |
+| `numeric` | best guess, optional low / high | raw numbers; linear or log scale |
+| `date` | best guess, optional low / high, optionally with a time of day | epoch ms (local noon for a day; `unit = "datetime"` when times are used) |
 
 The composer guesses the type from the wording ("How long…", "When…", "Will…") and parses deadlines ("by Friday", "tonight").
 
 ### Scoring (`src/lib/scoring/`)
 
 - **Yes/no**: Brier score, calibration chart with Wilson 90% intervals, and a logistic recalibration fit (`P(yes) = σ(a + b·logit p)`, weak priors) behind the "your 90%s happen ~78% of the time" hints.
-- **Ranges**: the three quantiles define a two-piece normal (log space for durations), giving every outcome a scale-free standardized error: hit rate vs. stated confidence, where reality landed (PIT), bias, and the planning multiplier (actual ÷ guess, each task capped at 8×).
+- **Ranges**: a forecast with only a best guess isn't scored for calibration (the page just says how far off it was). With both ends, the three quantiles define a two-piece normal (log space for durations), giving every outcome a scale-free standardized error: hit rate vs. stated confidence, where reality landed (PIT), bias, and the planning multiplier (actual ÷ guess, each task capped at 8×).
 - **Time-weighting**: each forecast counts for as long as it stood; last-second updates don't help.
 - **Scoreboard**: resolved public predictions only; "±" is Brier minus the median of everyone else on the same questions.
 

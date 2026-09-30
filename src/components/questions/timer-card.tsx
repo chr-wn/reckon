@@ -63,7 +63,9 @@ export function TimerCard({
 
   const pastHigh = t.high != null && minutes > t.high;
   const pastMedian = t.median != null && minutes > t.median;
-  const progress = t.high ? Math.min(1, minutes / t.high) : 0;
+  // the bar fills to your high end, or to your best guess when you gave no range
+  const barEnd = t.high ?? t.median;
+  const progress = barEnd ? Math.min(1, minutes / barEnd) : 0;
 
   return (
     <Card className="p-4 sm:p-5">

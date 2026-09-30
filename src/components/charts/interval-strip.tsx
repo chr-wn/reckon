@@ -4,9 +4,10 @@ import { cn } from "../ui";
 export interface StripRow {
   key: string;
   name: string;
-  low: number;
+  /** null for a best guess without a range: drawn as a dot only */
+  low: number | null;
   median: number;
-  high: number;
+  high: number | null;
   emphasis?: "you" | "group";
   note?: string;
 }
@@ -61,7 +62,7 @@ export function IntervalStrip({
   tz: string;
 }) {
   if (!rows.length) return null;
-  const vals = rows.flatMap((r) => [r.low, r.high]).concat(actual != null ? [actual] : []);
+  const vals = rows.flatMap((r) => [r.low ?? r.median, r.high ?? r.median]).concat(actual != null ? [actual] : []);
   const log = scaleType === "log";
   const tf = (v: number) => (log ? Math.log(Math.max(v, 1e-9)) : v);
   let lo = Math.min(...vals.map(tf));
@@ -84,7 +85,7 @@ export function IntervalStrip({
         <div className="space-y-3">
           {rows.map((r) => {
             const color = r.emphasis === "you" ? "var(--series-1)" : r.emphasis === "group" ? "var(--ink)" : "var(--ink-3)";
-            const hit = actual != null ? actual >= r.low && actual <= r.high : null;
+            const hit = actual != null && r.low != null && r.high != null ? actual >= r.low && actual <= r.high : null;
             return (
               <div key={r.key}>
                 <div className="mb-1 flex items-baseline justify-between gap-3 text-sm">
@@ -94,29 +95,33 @@ export function IntervalStrip({
                   </span>
                   <span className="shrink-0 tnum text-ink-2">
                     <span className="font-semibold text-ink">{v(r.median)}</span>{" "}
-                    <span className="text-ink-3">
-                      ({v(r.low)}–{v(r.high)})
-                    </span>
+                    {r.low != null && r.high != null && (
+                      <span className="text-ink-3">
+                        ({v(r.low)}–{v(r.high)})
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="relative h-3">
                   <div className="absolute inset-x-0 top-1/2 h-px bg-[var(--grid)]" />
-                  <div
-                    className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
-                    style={{ left: `${pos(r.low)}%`, width: `${Math.max(0.8, pos(r.high) - pos(r.low))}%`, background: color, opacity: 0.35 }}
-                  />
+                  {r.low != null && r.high != null && (
+                    <div
+                      className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full"
+                      style={{ left: `${pos(r.low)}%`, width: `${Math.max(0.8, pos(r.high) - pos(r.low))}%`, background: color, opacity: 0.35 }}
+                    />
+                  )}
                   <div
                     className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-[var(--surface)]"
                     style={{ left: `${pos(r.median)}%`, background: color }}
                   />
+                  {actual != null && (
+                    <div className="pointer-events-none absolute -bottom-1 -top-1 w-0.5 -translate-x-1/2 rounded bg-ink" style={{ left: `${pos(actual)}%` }} />
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
-        {actual != null && (
-          <div className="pointer-events-none absolute -bottom-1 -top-1 w-0.5 -translate-x-1/2 rounded bg-ink" style={{ left: `${pos(actual)}%` }} />
-        )}
       </div>
       <div className="relative mt-2 h-5 border-t border-[var(--axis)] text-[11px] text-ink-3 tnum">
         {ticks.map((t) => (

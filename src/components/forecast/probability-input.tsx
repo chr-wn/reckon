@@ -21,11 +21,14 @@ export function ProbabilityInput({
   onChange,
   id = "probability",
   compact = false,
+  label = "Probability",
 }: {
   value: number | null;
   onChange: (p: number | null) => void;
   id?: string;
   compact?: boolean;
+  /** accessible name of the slider and box (it's also the "how sure?" control for ranges) */
+  label?: string;
 }) {
   const [text, setText] = useState(value == null ? "" : String(Math.round(value * 1000) / 10));
   const pctVal = value == null ? 50 : Math.round(value * 100);
@@ -45,7 +48,7 @@ export function ProbabilityInput({
           max={99}
           step={1}
           value={pctVal}
-          aria-label="Probability"
+          aria-label={label}
           aria-valuetext={value == null ? "not set" : `${pctVal}%`}
           onChange={(e) => {
             const v = Number(e.target.value);
@@ -59,6 +62,7 @@ export function ProbabilityInput({
         <div className="relative w-[5.5rem] shrink-0">
           <input
             id={id}
+            aria-label={label}
             data-flow=""
             inputMode="decimal"
             autoComplete="off"
