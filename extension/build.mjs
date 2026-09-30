@@ -60,7 +60,7 @@ const manifest = {
   },
   permissions: ["activeTab", "scripting"],
   host_permissions: [`${reckonUrl}/*`],
-  content_scripts: [{ matches: ["https://calendar.google.com/*"], js: ["calendar.js"], run_at: "document_idle" }],
+  content_scripts: [{ matches: ["https://calendar.google.com/*"], js: ["calendar.js"], run_at: "document_start" }],
   web_accessible_resources: [{ resources: ["composer.html", "composer.js", "composer.css"], matches: ["<all_urls>"] }],
 };
 writeFileSync(join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2));

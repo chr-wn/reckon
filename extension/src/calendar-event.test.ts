@@ -31,9 +31,20 @@ describe("parseCalendarEvent", () => {
     expect(at("Sunday, January 21, 2024").start.getFullYear()).toBe(2024);
   });
 
-  it("skips lines that aren't a time (recurrence comes after)", () => {
+  it("reads the time when Calendar splits it into pieces (live task and event bubbles)", () => {
+    const task = parseCalendarEvent("complex", ["Sunday, September 27", "⋅", "10:30 – 10:45am"], ref)!;
+    expect([task.start, task.end]).toEqual([new Date(2026, 8, 27, 10, 30), new Date(2026, 8, 27, 10, 45)]);
+    expect(task.when).toBe("Sunday, September 27 10:30 – 10:45am");
+    const event = parseCalendarEvent("eat", ["Sunday, September 27", "⋅", "11:45am – 12:00pm"], ref)!;
+    expect(event.end).toEqual(new Date(2026, 8, 27, 12, 0));
+    // what follows the time on a task ("Completed: Monday, September 28") doesn't win
+    const done = parseCalendarEvent("complex", ["Sunday, September 27 ⋅ 10:30 – 10:45am", "Completed:", "Monday, September 28"], ref)!;
+    expect(done.start).toEqual(new Date(2026, 8, 27, 10, 30));
+  });
+
+  it("skips lines that aren't a time", () => {
     const e = parseCalendarEvent("Standup", ["Weekly on weekdays", "Tuesday, September 29⋅9:30 – 9:45am"], ref);
-    expect(e?.when).toBe("Tuesday, September 29⋅9:30 – 9:45am");
+    expect(e?.start).toEqual(new Date(2026, 8, 29, 9, 30));
     expect(parseCalendarEvent("Standup", ["Room 247"], ref)).toBeNull();
     expect(parseCalendarEvent("", ["Tuesday, September 29⋅9:30 – 9:45am"], ref)).toBeNull();
   });
@@ -44,7 +55,7 @@ describe("predictionForEvent", () => {
     const p = predictionForEvent(at("Tuesday, September 29⋅10:15 – 11:30am"), tz);
     expect(p.title).toBe("Will I finish War & Conflict in Literature - Block 6 within 1h 15m?");
     expect(p.closesAt).toBe(new Date(2026, 8, 29, 11, 30).getTime());
-    expect(p.details).toBe("From Google Calendar: Tuesday, September 29⋅10:15 – 11:30am");
+    expect(p.details).toBe("From Google Calendar: Tuesday, September 29 10:15 – 11:30am");
     expect(p.focus).toBe("forecast");
   });
 

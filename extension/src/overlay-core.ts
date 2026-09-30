@@ -16,9 +16,24 @@ interface OverlayState {
   onMessage: (e: MessageEvent) => void;
 }
 
-const state: { current: OverlayState | null } = ((window as unknown as { __reckonOverlay?: { current: OverlayState | null } }).__reckonOverlay ??= {
-  current: null,
-});
+const state: { current: OverlayState | null; shielded?: boolean } = ((
+  window as unknown as { __reckonOverlay?: { current: OverlayState | null; shielded?: boolean } }
+).__reckonOverlay ??= { current: null });
+
+/**
+ * Modal dialogs (Google Calendar's event bubble) trap focus and would pull it straight back out of the
+ * composer, so hide focus moving to or from our frame from the page. Capture listeners run in the order
+ * they were added: call this at document_start on pages whose own scripts listen on window.
+ */
+export function shieldFocus() {
+  if (state.shielded) return;
+  state.shielded = true;
+  const onFocusChange = (e: FocusEvent) => {
+    const frame = state.current?.frame;
+    if (frame && (e.target === frame || e.relatedTarget === frame)) e.stopImmediatePropagation();
+  };
+  for (const type of ["focusin", "focusout", "focus", "blur"]) window.addEventListener(type, onFocusChange as EventListener, true);
+}
 
 export const isComposerOpen = () => state.current != null;
 
@@ -51,6 +66,7 @@ export function openComposer(prefill?: ComposerInitial) {
     }
   };
   window.addEventListener("message", onMessage);
+  shieldFocus();
   state.current = { frame, previousFocus: document.activeElement, onMessage };
   document.documentElement.appendChild(frame);
   // focus now and again once loaded: whichever comes after the page settles wins

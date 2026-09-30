@@ -1,11 +1,14 @@
-import { predictionForEvent, readOpenEvent } from "./calendar-event";
-import { isComposerOpen, openComposer } from "./overlay-core";
+import { openDetailsDialog, predictionForEvent, readOpenEvent } from "./calendar-event";
+import { isComposerOpen, openComposer, shieldFocus } from "./overlay-core";
 
 /**
- * Google Calendar: adds a "Predict" row to the event-details bubble, and `f`
+ * Google Calendar: adds a "Predict" row to the event/task details bubble, and `f`
  * (for forecast) while the bubble is open. Either opens the composer with
  * "Will I finish <event> within <length>?" filled in and the cursor in the
  * probability box.
+ *
+ * Runs at document_start: Calendar's own window-level key handlers swallow
+ * keystrokes (and its bubble traps focus), so ours have to be added first.
  */
 
 const ROW_ID = "reckon-calendar-row";
@@ -32,7 +35,7 @@ function logoSvg() {
 }
 
 function ensureRow() {
-  const dialog = document.querySelector<HTMLElement>("#xDetDlg");
+  const dialog = openDetailsDialog(document);
   if (!dialog || dialog.querySelector(`#${ROW_ID}`)) return;
   const event = readOpenEvent(document);
   if (!event) return;
@@ -53,24 +56,44 @@ function ensureRow() {
   key.style.cssText =
     "font:600 11px/1 ui-monospace,monospace;padding:3px 6px;border-radius:5px;border:1px solid color-mix(in srgb, currentColor 30%, transparent);opacity:.8;";
   row.append(logoSvg(), label, key);
-  row.addEventListener("click", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    predictOpenEvent();
-  });
-  dialog.appendChild(row);
+  // Right under the title + time block: the first ancestor of the title holding more than the title.
+  // (The bubble itself is a flex row, so appending to it would add a side column.)
+  let block = dialog.querySelector("#rAECCd");
+  while (block?.parentElement && block.parentElement !== dialog && clean(block.textContent) === event.title) block = block.parentElement;
+  if (block) block.after(row);
+  else dialog.appendChild(row);
 }
 
-let scheduled = false;
-new MutationObserver(() => {
-  if (scheduled) return;
-  scheduled = true;
-  requestAnimationFrame(() => {
-    scheduled = false;
-    ensureRow();
-  });
-}).observe(document.body, { childList: true, subtree: true });
-ensureRow();
+const clean = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
+
+shieldFocus();
+
+// clicks on the row are caught here too, before Calendar's handlers can eat them
+window.addEventListener(
+  "click",
+  (e) => {
+    if (!(e.target instanceof Element) || !e.target.closest(`#${ROW_ID}`)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    predictOpenEvent();
+  },
+  true,
+);
+
+function watchForBubbles() {
+  let scheduled = false;
+  new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      ensureRow();
+    });
+  }).observe(document.documentElement, { childList: true, subtree: true });
+  ensureRow();
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watchForBubbles);
+else watchForBubbles();
 
 window.addEventListener(
   "keydown",

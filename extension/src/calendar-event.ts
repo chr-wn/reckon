@@ -5,13 +5,15 @@ import { fmtDate, fmtDuration } from "@/lib/format";
 /**
  * Google Calendar's DOM is obfuscated, but a few hooks have been stable for
  * years and are what maintained extensions (Clockify, calendarNotes, pangu.js…)
- * rely on: the event-details bubble `#xDetDlg`, its title `#rAECCd`, and the
- * time line inside `#xDetDlgWhen`, e.g. "Tuesday, September 29⋅10:15 – 11:30am".
+ * rely on. Checked against live Calendar (2026-09-30): both the event and the
+ * task details bubbles are a `[role=dialog]` holding the title `#rAECCd`, with
+ * the time right under it as separate pieces: "Sunday, September 27", "⋅",
+ * "10:30 – 10:45am". Events also have `#xDetDlg` / `#xDetDlgWhen`; tasks don't.
  */
 
 export interface CalendarEvent {
   title: string;
-  /** the time line as Calendar shows it */
+  /** the time as Calendar shows it */
   when: string;
   start: Date;
   end: Date | null;
@@ -20,25 +22,33 @@ export interface CalendarEvent {
 
 const clean = (s: string | null | undefined) => (s ?? "").replace(/\s+/g, " ").trim();
 
-/** The event whose details bubble is open, if any. */
-export function readOpenEvent(doc: Document, ref = new Date()): CalendarEvent | null {
-  const dialog = doc.querySelector<HTMLElement>("#xDetDlg");
-  if (!dialog || dialog.getClientRects().length === 0) return null;
-  const title = clean(dialog.querySelector("#rAECCd, [id^='rAECCd'], [role='heading']")?.textContent);
-  const whenRoot = dialog.querySelector<HTMLElement>("#xDetDlgWhen") ?? dialog;
-  const lines = whenRoot.innerText.split("\n").map(clean).filter((line) => line && line !== title);
-  return parseCalendarEvent(title, lines, ref);
+/** The details bubble (event or task) that's open, if any. */
+export function openDetailsDialog(doc: Document): HTMLElement | null {
+  const heading = doc.querySelector<HTMLElement>("#rAECCd");
+  const dialog = heading?.closest<HTMLElement>("[role='dialog']") ?? doc.querySelector<HTMLElement>("#xDetDlg");
+  return dialog && dialog.getClientRects().length > 0 ? dialog : null;
 }
 
-/** First line that reads as a date or time range becomes the event's timing. */
+/** The event or task whose details bubble is open, if any. */
+export function readOpenEvent(doc: Document, ref = new Date()): CalendarEvent | null {
+  const dialog = openDetailsDialog(doc);
+  if (!dialog) return null;
+  const title = clean(dialog.querySelector("#rAECCd")?.textContent);
+  const lines = dialog.innerText.split("\n").map(clean).filter(Boolean);
+  const titleLine = lines.indexOf(title);
+  // the time sits right under the title (possibly split over a few lines); later lines are "Completed: …", location…
+  return parseCalendarEvent(title, lines.slice(titleLine + 1, titleLine + 4), ref);
+}
+
+/** The first date/time found reading the lines under the title, joined (Calendar may split them) or one at a time. */
 export function parseCalendarEvent(title: string, whenLines: string[], ref: Date): CalendarEvent | null {
   if (!title) return null;
-  for (const line of whenLines) {
-    const [result] = casual.parse(line.replace(/[⋅·]/g, " "), ref);
+  for (const candidate of [whenLines.join(" "), ...whenLines]) {
+    const [result] = casual.parse(candidate.replace(/[\u22c5\u00b7]/g, " "), ref);
     if (!result) continue;
     return {
       title,
-      when: line,
+      when: clean(result.text),
       start: result.start.date(),
       end: result.end?.date() ?? null,
       allDay: !result.start.isCertain("hour"),

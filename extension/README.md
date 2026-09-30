@@ -31,7 +31,7 @@ How it fits together:
 - `background.ts` (service worker): opens the composer on the shortcut/icon by injecting `overlay.js` into the tab (activeTab); pages that can't be scripted (chrome://, the Web Store) get a small window instead. It also makes every Reckon API call (`/api/me`, `/api/questions`). Requests from the worker carry the normal Reckon session cookie because the extension has host permission for the site, so there's no separate login or token.
 - `overlay-core.ts`: a full-viewport transparent iframe of `composer.html`, isolated from the page's CSS; a toast after posting.
 - `composer.tsx`: the composer page (overlay or window). Talks to the page with `postMessage`, to Reckon through the worker.
-- `calendar.ts` + `calendar-event.ts`: Google Calendar content script. Relies on the hooks maintained extensions use (`#xDetDlg`, `#rAECCd`, `#xDetDlgWhen`); the time line is parsed with chrono. Tests: `npm test`.
+- `calendar.ts` + `calendar-event.ts`: Google Calendar content script. Checked against live Calendar (Sept 2026): event and task bubbles are both a `[role=dialog]` containing the title `#rAECCd` with the time under it, split into pieces ("Sunday, September 27" · "⋅" · "10:30 – 10:45am"); only events also have `#xDetDlg`/`#xDetDlgWhen`. The bubble is a flex row, so the Reckon row goes right after the title + time block. Calendar's own window-level handlers swallow keys and its bubble traps focus, so the script runs at `document_start` to get its capture listeners in first (and hides focus moving into the overlay from the page). Tests: `npm test`.
 
 ## Chrome Web Store listing
 
