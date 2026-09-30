@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCalendarEvent, predictionForEvent } from "./calendar-event";
+import { howLongForEvent, parseCalendarEvent, predictionForEvent } from "./calendar-event";
 
 // Time lines as Google Calendar renders them (formats collected by Clockify's integration, plus ours).
 const ref = new Date(2026, 8, 29, 9, 0);
@@ -63,5 +63,23 @@ describe("predictionForEvent", () => {
     const p = predictionForEvent(at("Sunday, December 10"), tz);
     expect(p.title).toBe("Will I finish War & Conflict in Literature - Block 6 by Thu, Dec 10?");
     expect(p.closesAt).toBe(new Date(2026, 11, 10, 23, 59).getTime());
+  });
+});
+
+describe("howLongForEvent", () => {
+  it("asks how long, with the block's length as the best guess, planned to end with the block", () => {
+    const p = howLongForEvent(at("Tuesday, September 29⋅10:15 – 11:30am"));
+    expect(p).toMatchObject({ type: "duration", title: "How long will War & Conflict in Literature - Block 6 take?", guess: 75, durationUnit: "minutes", focus: "guess" });
+    expect(p.closesAt).toBe(new Date(2026, 8, 29, 11, 30).getTime());
+  });
+
+  it("shows long blocks in hours", () => {
+    expect(howLongForEvent(at("Tuesday, September 29⋅1:00 – 4:00pm")).durationUnit).toBe("hours");
+  });
+
+  it("has no guess for an all-day event", () => {
+    const p = howLongForEvent(at("Sunday, December 10"));
+    expect(p.guess).toBeUndefined();
+    expect(p.closesAt).toBeNull();
   });
 });

@@ -21,7 +21,7 @@ import { runAltShortcut, type Shortcut } from "@/lib/shortcuts";
 import { useHydrated } from "@/lib/use-hydrated";
 import type { CreateQuestionInput } from "@/lib/validation";
 
-type FocusTarget = "title" | "forecast" | "deadline" | "notes" | "confidence";
+type FocusTarget = "title" | "forecast" | "guess" | "deadline" | "notes" | "confidence";
 
 /** Starting values, e.g. from a Google Calendar event in the Chrome extension. */
 export interface ComposerInitial {
@@ -30,6 +30,11 @@ export interface ComposerInitial {
   /** epoch ms */
   closesAt?: number | null;
   focus?: FocusTarget;
+  /** start as this type instead of guessing it from the wording */
+  type?: QType;
+  /** a prefilled best guess (minutes for "how long"), shown in `durationUnit` */
+  guess?: number;
+  durationUnit?: DurationUnit;
 }
 
 export interface ComposerFormProps {
@@ -60,6 +65,7 @@ const PRESET_LABELS = ["Tonight", "Tomorrow", "Friday", "1 week", "1 month"];
 const FOCUS_SELECTORS: Record<FocusTarget, string> = {
   title: "#q-title",
   forecast: "#q-probability, [data-quantile='low']",
+  guess: "[data-quantile='median']",
   deadline: "#q-closes",
   notes: "#q-notes",
   confidence: "#q-confidence",
@@ -90,11 +96,15 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
   const rootRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState(initial?.title ?? "");
-  const [pickedType, setPickedType] = useState<QType | null>(null);
+  const [pickedType, setPickedType] = useState<QType | null>(initial?.type ?? null);
   const [probability, setProbability] = useState<number | null>(null);
-  const [draft, setDraft] = useState<QuantileDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<QuantileDraft>(() =>
+    initial?.guess != null && initial.type && initial.type !== "binary"
+      ? toDraft(initial.type, { low: null, median: initial.guess, high: null }, initial.durationUnit ?? "minutes")
+      : EMPTY_DRAFT,
+  );
   const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE);
-  const [durUnit, setDurUnit] = useState<DurationUnit>("minutes");
+  const [durUnit, setDurUnit] = useState<DurationUnit>(initial?.durationUnit ?? "minutes");
   const [numUnit, setNumUnit] = useState("");
   const [logScale, setLogScale] = useState(false);
   const [withTime, setWithTime] = useState(false);

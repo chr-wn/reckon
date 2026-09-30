@@ -14,7 +14,7 @@ const repoRoot = join(extensionDir, "..");
 const outDir = join(extensionDir, "dist");
 const reckonUrl = (process.env.RECKON_URL ?? "https://reckoned.vercel.app").replace(/\/$/, "");
 // bump for every Web Store upload
-const version = "0.1.0";
+const version = "0.1.1";
 
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });

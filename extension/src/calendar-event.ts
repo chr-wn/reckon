@@ -1,6 +1,6 @@
 import { casual } from "chrono-node";
 import type { ComposerInitial } from "@/components/composer/composer-form";
-import { fmtDate, fmtDuration } from "@/lib/format";
+import { fmtDate, fmtDuration, naturalDurationUnit } from "@/lib/format";
 
 /**
  * Google Calendar's DOM is obfuscated, but a few hooks have been stable for
@@ -75,4 +75,19 @@ export function predictionForEvent(event: CalendarEvent, tz: string): ComposerIn
   }
   const minutes = (event.end.getTime() - event.start.getTime()) / 60000;
   return { title: `Will I finish ${event.title} within ${fmtDuration(minutes)}?`, closesAt: event.end.getTime(), details, focus: "forecast" };
+}
+
+/** "How long will <event> take?", with the block's length as the best guess and its end as the plan. */
+export function howLongForEvent(event: CalendarEvent): ComposerInitial {
+  const details = `From Google Calendar: ${event.when}`;
+  const minutes = event.end && !event.allDay ? (event.end.getTime() - event.start.getTime()) / 60000 : null;
+  const planned = !event.allDay && event.end ? event.end : null;
+  return {
+    type: "duration",
+    title: `How long will ${event.title} take?`,
+    details,
+    closesAt: planned?.getTime() ?? null,
+    ...(minutes && minutes > 0 ? { guess: minutes, durationUnit: naturalDurationUnit(minutes) } : {}),
+    focus: "guess",
+  };
 }

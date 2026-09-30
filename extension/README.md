@@ -7,7 +7,8 @@ Make a prediction from any page. The composer is the same React component as the
 | | |
 |---|---|
 | **⌃⇧R** (Alt+Shift+R on Windows/Linux) or the toolbar icon | open the composer over the current page (selected text becomes the question) |
-| **F** on Google Calendar, with an event open (or click the Reckon row in the event bubble) | “Will I finish ‹event› within ‹its length›?”, due when the block ends, cursor in the probability |
+| **F** on Google Calendar, with an event open (or click the first Reckon row in the event bubble) | “Will I finish ‹event› within ‹its length›?”, due when the block ends, cursor in the probability |
+| **L** there (or the second row) | “How long will ‹event› take?”, a how-long question with the block's length as your best guess and its end as the plan |
 | ↵ / ⌘↵ / Esc | next field / post (link copied) / close |
 | ⌥Y ⌥L ⌥M ⌥W | yes/no · how long · how much · when (on an empty box they also type “Will I…”, “How long will…”) |
 | ⌥1–⌥5, ⌥0, ⌥D | deadline tonight / tomorrow / Friday / 1 week / 1 month, none, edit |
@@ -45,7 +46,7 @@ How it fits together:
 >
 > • Press Ctrl+Shift+R (Alt+Shift+R on Windows) anywhere. Type the question, Enter, your probability, ⌘/Ctrl+Enter. The link is copied so you can paste it wherever you're talking about it.
 > • Every control has a key: ⌥Y/⌥L/⌥M/⌥W switch between yes/no, how long, how much and when; ⌥1–5 pick a deadline; ⌥P makes it private; ⌥/ shows the rest.
-> • Google Calendar: open an event and press F. Reckon writes “Will I finish ‹event› within ‹its length›?”, due when the block ends. You just type how confident you are.
+> • Google Calendar: open an event and press F for “Will I finish ‹event› within ‹its length›?” (you type how confident you are), or L for “How long will ‹event› take?” with the block's length as your best guess.
 >
 > Uses your existing Reckon sign-in. No tracking, no analytics, and it talks to no server except Reckon.
 
