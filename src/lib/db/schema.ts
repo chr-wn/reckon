@@ -63,7 +63,7 @@ export const questions = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
-    /** numeric: free-text unit ("pages", "$"); duration: preferred display unit ("minutes" | "hours" | "days"). */
+    /** numeric: free-text unit ("pages", "$"); duration: preferred display unit ("minutes" | "hours" | "days"); date: "datetime" when forecasts include a time of day. */
     unit: text("unit"),
     /** How errors are measured for continuous questions: "log" = ratios (1.5× too low), "linear" = differences. */
     scale: text("scale", { enum: ["linear", "log"] }).notNull().default("linear"),

@@ -11,7 +11,7 @@ Make a prediction from any page. The composer is the same React component as the
 | ↵ / ⌘↵ / Esc | next field / post (link copied) / close |
 | ⌥Y ⌥L ⌥M ⌥W | yes/no · how long · how much · when (on an empty box they also type “Will I…”, “How long will…”) |
 | ⌥1–⌥5, ⌥0, ⌥D | deadline tonight / tomorrow / Friday / 1 week / 1 month, none, edit |
-| ⌥P ⌥O ⌥C ⌥H ⌥T ⌥R | public/private · notes · range confidence · duration unit · start timer · judge as ratios |
+| ⌥P ⌥O ⌥C ⌥H ⌥T ⌥R | public/private · notes · range confidence · duration unit · start timer (how long) or include a time (when) · judge as ratios |
 | ↑ ↓ (⇧) | probability ±1 (±5) |
 | ⌥/ | list all of the above |
 
@@ -24,7 +24,7 @@ npm run dev                                      # Reckon on :3000 (or -- -p 310
 RECKON_URL=http://localhost:3000 npm run ext:build
 ```
 
-Load `extension/dist` at `chrome://extensions` → Developer mode → Load unpacked; rebuild and hit reload after changes. `npm run ext:zip` builds for `https://reckon.vercel.app` and writes the Web Store zip. Bump `version` in `build.mjs` for every upload.
+Load `extension/dist` at `chrome://extensions` → Developer mode → Load unpacked; rebuild and hit reload after changes. `npm run ext:zip` builds for `https://reckoned.vercel.app` and writes the Web Store zip. Bump `version` in `build.mjs` for every upload.
 
 How it fits together:
 
@@ -35,7 +35,7 @@ How it fits together:
 
 ## Chrome Web Store listing
 
-**Name** Reckon for Chrome · **Category** Productivity · **Privacy policy** https://reckon.vercel.app/privacy
+**Name** Reckon for Chrome · **Category** Productivity · **Privacy policy** https://reckoned.vercel.app/privacy
 
 **Summary** Make a Reckon prediction from any page with one shortcut, and turn Google Calendar events into forecasts.
 
@@ -55,7 +55,7 @@ How it fits together:
 
 - `activeTab`: when you click the icon or press the shortcut, draw the composer on that tab and read the selected text to prefill the question.
 - `scripting`: inject the composer overlay into the active tab at that moment.
-- Host `https://reckon.vercel.app/*`: send your prediction to your Reckon account (with your Reckon session).
+- Host `https://reckoned.vercel.app/*`: send your prediction to your Reckon account (with your Reckon session).
 - Content script on `https://calendar.google.com/*`: add the “Predict” row to the event-details bubble and read that event's title and time.
 - Remote code: none.
 

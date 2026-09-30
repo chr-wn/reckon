@@ -10,6 +10,7 @@ import { KeyboardFlow } from "@/components/keyboard-flow";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { submitForecast } from "@/lib/actions/questions";
 import { DURATION_UNITS, type DurationUnit } from "@/lib/constants";
+import { hasTimeOfDay } from "@/lib/format";
 import type { Scale } from "@/lib/scoring/continuous";
 import type { TrackRecord } from "@/lib/scoring/records";
 
@@ -37,18 +38,19 @@ export function ForecastForm({
 }) {
   const kind: ContinuousKind | null = q.type === "binary" ? null : q.type;
   const durUnit: DurationUnit = DURATION_UNITS.includes(q.unit as DurationUnit) ? (q.unit as DurationUnit) : "minutes";
+  const withTime = hasTimeOfDay(q);
   const [probability, setProbability] = useState<number | null>(latest?.probability ?? null);
   const [draft, setDraft] = useState<QuantileDraft>(() =>
     kind && latest?.low != null && latest.median != null && latest.high != null
-      ? toDraft(kind, { low: latest.low, median: latest.median, high: latest.high }, durUnit, tz)
+      ? toDraft(kind, { low: latest.low, median: latest.median, high: latest.high }, durUnit, tz, withTime)
       : EMPTY_DRAFT,
   );
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [pending, start] = useTransition();
-  const parsed = kind ? parseDraft(kind, draft, durUnit) : null;
-  const unitLabel = q.type === "numeric" ? q.unit : q.type === "duration" ? durUnit : null;
+  const parsed = kind ? parseDraft(kind, draft, durUnit, withTime, tz) : null;
+  const unitLabel = q.type === "duration" ? durUnit : q.unit;
   const isUpdate = latest != null;
 
   function submit() {
@@ -95,7 +97,7 @@ export function ForecastForm({
           </>
         ) : (
           <>
-            <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={q.confidence} unit={durUnit} numericUnit={q.unit} />
+            <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={q.confidence} unit={durUnit} numericUnit={q.unit} withTime={withTime} />
             {parsed?.error && <p className="text-sm text-bad-ink">{parsed.error}</p>}
             {parsed?.quantiles && (
               <div className="space-y-2 rounded-xl bg-surface-2/60 px-3 pb-2 pt-3">
@@ -112,7 +114,7 @@ export function ForecastForm({
               tags={q.tags}
               unit={unitLabel}
               tz={tz}
-              onApply={(adj) => setDraft(toDraft(kind!, adj, durUnit))}
+              onApply={(adj) => setDraft(toDraft(kind!, adj, durUnit, tz, withTime))}
             />
           </>
         )}

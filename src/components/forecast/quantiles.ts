@@ -1,5 +1,6 @@
 import type { DurationUnit } from "@/lib/constants";
 import { fromMinutes, toMinutes } from "@/lib/format";
+import { fromDateTimeInput, toDateTimeInput } from "@/lib/parse-date";
 import type { Quantiles } from "@/lib/scoring/continuous";
 
 export type ContinuousKind = "numeric" | "duration" | "date";
@@ -32,17 +33,49 @@ export function fromDateInput(s: string): number | null {
   return new Date(+m[1], +m[2] - 1, +m[3], 12, 0, 0).getTime();
 }
 
-function parseOne(kind: ContinuousKind, s: string, unit: DurationUnit): number | null {
-  if (kind === "date") return fromDateInput(s);
+/** yyyy-mm-ddThh:mm for <input type="datetime-local">, in `tz` if given, else browser-local. */
+export function toDateTimeLocal(ms: number, tz?: string): string {
+  if (!tz) return toDateTimeInput(new Date(ms));
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(ms)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/** Inverse of toDateTimeLocal: wall-clock time in `tz` (else browser-local) → epoch ms. */
+export function fromDateTimeLocal(s: string, tz?: string): number | null {
+  if (!tz) return fromDateTimeInput(s)?.getTime() ?? null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(s);
+  if (!m) return null;
+  const wall = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]);
+  // tz's offset at a moment = its wall clock then, read as UTC, minus the moment; one refinement covers DST edges
+  const offsetAt = (ms: number) => {
+    const [date, time] = toDateTimeLocal(ms, tz).split("T");
+    const [y, mo, d] = date.split("-").map(Number);
+    const [h, mi] = time.split(":").map(Number);
+    return Date.UTC(y, mo - 1, d, h, mi) - Math.floor(ms / 60000) * 60000;
+  };
+  const guess = wall - offsetAt(wall);
+  return wall - offsetAt(guess);
+}
+
+function parseOne(kind: ContinuousKind, s: string, unit: DurationUnit, withTime: boolean, tz?: string): number | null {
+  if (kind === "date") return withTime ? fromDateTimeLocal(s, tz) : fromDateInput(s);
   const v = Number(s.replace(/,/g, "").trim());
   if (s.trim() === "" || !Number.isFinite(v)) return null;
   return kind === "duration" ? toMinutes(v, unit) : v;
 }
 
-export function parseDraft(kind: ContinuousKind, d: QuantileDraft, unit: DurationUnit = "minutes") {
-  const low = parseOne(kind, d.low, unit);
-  const median = parseOne(kind, d.median, unit);
-  const high = parseOne(kind, d.high, unit);
+/**
+ * `withTime`: date drafts hold yyyy-mm-ddThh:mm instead of yyyy-mm-dd, read in `tz` when given
+ * (pass the user's zone wherever the form is also rendered on the server, so both agree).
+ */
+export function parseDraft(kind: ContinuousKind, d: QuantileDraft, unit: DurationUnit = "minutes", withTime = false, tz?: string) {
+  const low = parseOne(kind, d.low, unit, withTime, tz);
+  const median = parseOne(kind, d.median, unit, withTime, tz);
+  const high = parseOne(kind, d.high, unit, withTime, tz);
   const complete = low != null && median != null && high != null;
   let error: string | null = null;
   if (complete) {
@@ -59,8 +92,8 @@ const trimNum = (x: number) => {
   return String(r);
 };
 
-export function toDraft(kind: ContinuousKind, q: Quantiles, unit: DurationUnit = "minutes", tz?: string): QuantileDraft {
+export function toDraft(kind: ContinuousKind, q: Quantiles, unit: DurationUnit = "minutes", tz?: string, withTime = false): QuantileDraft {
   const one = (v: number) =>
-    kind === "date" ? toDateInput(v, tz) : kind === "duration" ? trimNum(fromMinutes(v, unit)) : trimNum(v);
+    kind === "date" ? (withTime ? toDateTimeLocal(v, tz) : toDateInput(v, tz)) : kind === "duration" ? trimNum(fromMinutes(v, unit)) : trimNum(v);
   return { low: one(q.low), median: one(q.median), high: one(q.high) };
 }

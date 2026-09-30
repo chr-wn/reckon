@@ -56,7 +56,7 @@ export async function createQuestion(input: CreateQuestionInput): Promise<Action
         title: d.title,
         details: d.details || null,
         visibility: d.visibility,
-        unit: d.type === "numeric" ? d.unit || null : d.type === "duration" ? d.unit : null,
+        unit: d.type === "numeric" ? d.unit || null : d.type === "duration" ? d.unit : d.type === "date" && d.withTime ? "datetime" : null,
         scale,
         confidence: d.type === "binary" ? 0.8 : d.confidence,
         closesAt: d.closesAt != null ? new Date(d.closesAt) : null,

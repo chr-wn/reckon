@@ -81,11 +81,12 @@ export function isValidTimeZone(tz: string): boolean {
   }
 }
 
-type DateStyle = "day" | "dayYear" | "dateTime" | "time" | "monthDay";
+type DateStyle = "day" | "dayYear" | "dateTime" | "time" | "monthDay" | "monthDayTime";
 
 const DATE_OPTS: Record<DateStyle, Intl.DateTimeFormatOptions> = {
   day: { weekday: "short", month: "short", day: "numeric" },
   monthDay: { month: "short", day: "numeric" },
+  monthDayTime: { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
   dayYear: { month: "short", day: "numeric", year: "numeric" },
   dateTime: { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" },
   time: { hour: "numeric", minute: "2-digit" },
@@ -95,7 +96,7 @@ export function fmtDate(d: Date | number, tz: string, style: DateStyle = "day"):
   const date = typeof d === "number" ? new Date(d) : d;
   const opts = { ...DATE_OPTS[style], timeZone: tz };
   // Add the year when it isn't this year.
-  if ((style === "day" || style === "monthDay" || style === "dateTime") && date.getFullYear() !== new Date().getFullYear()) {
+  if ((style === "day" || style === "monthDay" || style === "dateTime" || style === "monthDayTime") && date.getFullYear() !== new Date().getFullYear()) {
     opts.year = "numeric";
   }
   return new Intl.DateTimeFormat("en-US", opts).format(date);
@@ -135,13 +136,16 @@ export interface ValueContext {
   unit?: string | null;
 }
 
+/** "When" questions can be about a day (the default) or a time of day; the latter store unit "datetime". */
+export const hasTimeOfDay = (q: ValueContext) => q.type === "date" && q.unit === "datetime";
+
 /** Human display for a continuous value of a question. */
 export function fmtValue(q: ValueContext, value: number, tz: string): string {
   switch (q.type) {
     case "duration":
       return fmtDuration(value);
     case "date":
-      return fmtDate(value, tz, "monthDay");
+      return fmtDate(value, tz, hasTimeOfDay(q) ? "monthDayTime" : "monthDay");
     case "numeric":
       return withUnit(fmtNum(value), q.unit);
     default:

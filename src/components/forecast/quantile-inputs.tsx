@@ -24,6 +24,7 @@ export function QuantileInputs({
   confidence,
   unit,
   numericUnit,
+  withTime = false,
 }: {
   kind: ContinuousKind;
   draft: QuantileDraft;
@@ -33,6 +34,8 @@ export function QuantileInputs({
   unit?: DurationUnit;
   /** numeric unit label */
   numericUnit?: string | null;
+  /** date questions: pick a time of day too */
+  withTime?: boolean;
 }) {
   const tail = pct((1 - confidence) / 2, confidence === 0.95 ? 1 : 0);
   const [lessWord, moreWord] = TAIL_WORDS[kind];
@@ -43,7 +46,7 @@ export function QuantileInputs({
       <span className="mb-1.5 block text-xs text-ink-3">{sub}</span>
       <div className="relative">
         <input
-          type={kind === "date" ? "date" : "text"}
+          type={kind === "date" ? (withTime ? "datetime-local" : "date") : "text"}
           data-flow=""
           data-quantile={key}
           inputMode={kind === "date" ? undefined : "decimal"}
@@ -62,7 +65,7 @@ export function QuantileInputs({
     </label>
   );
   return (
-    <div className={cn("grid gap-3", kind === "date" ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-3")}>
+    <div className={cn("grid gap-3", kind === "date" ? (withTime ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-3") : "grid-cols-3")}>
       {field("low", "Low end", `${tail} chance it ${lessWord}`)}
       {field("median", "Best guess", "50/50 either side")}
       {field("high", "High end", `${tail} chance it ${moreWord}`)}

@@ -139,9 +139,9 @@ function App() {
               Posted: <span className="font-medium">{posted.title}</span>
               {posted.copied && " · link copied"}
             </span>
-            <button type="button" onClick={() => openTab(posted.url)} className="shrink-0 font-medium underline underline-offset-2">
+            <a href={posted.url} target="_blank" rel="noopener" className="shrink-0 font-medium underline underline-offset-2">
               View
-            </button>
+            </a>
           </div>
         )}
 

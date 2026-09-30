@@ -96,6 +96,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
   const [durUnit, setDurUnit] = useState<DurationUnit>("minutes");
   const [numUnit, setNumUnit] = useState("");
   const [logScale, setLogScale] = useState(false);
+  const [withTime, setWithTime] = useState(false);
   // null = not touched (use the deadline parsed from the question)
   const [closesInput, setClosesInput] = useState<string | null>(initial?.closesAt != null ? toDateTimeInput(new Date(initial.closesAt)) : null);
   const [visibility, setVisibility] = useState<Visibility>("public");
@@ -154,9 +155,17 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
   const closesValue = closesInput ?? (autoDeadline ? toDateTimeInput(autoDeadline) : "");
   const closesDate = fromDateTimeInput(closesValue);
 
-  const parsed = kind ? parseDraft(kind, draft, durUnit) : null;
+  const timed = type === "date" && withTime;
+  const parsed = kind ? parseDraft(kind, draft, durUnit, timed, tz) : null;
   const quantiles = parsed?.quantiles ?? null;
-  const unitLabel = type === "numeric" ? numUnit : type === "duration" ? durUnit : null;
+  const unitLabel = type === "numeric" ? numUnit : type === "duration" ? durUnit : timed ? "datetime" : null;
+
+  /** "When" answers: switch between a day and a day + time, keeping what's typed. */
+  function toggleTime() {
+    const convert = (s: string) => (withTime ? s.slice(0, 10) : /^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T12:00` : s);
+    setDraft((d) => ({ low: convert(d.low), median: convert(d.median), high: convert(d.high) }));
+    setWithTime(!withTime);
+  }
 
   function chooseType(t: QType) {
     if (!title.trim()) {
@@ -191,6 +200,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
         ]
       : []),
     ...(type === "numeric" ? [{ code: "KeyR", label: "⌥R", description: "Judge as ratios", run: () => setLogScale((s) => !s) }] : []),
+    ...(type === "date" ? [{ code: "KeyT", label: "⌥T", description: "Include a time of day", run: toggleTime }] : []),
     { code: "Slash", label: "⌥/", description: "Show / hide shortcuts", run: () => setShowKeys((s) => !s) },
   ];
 
@@ -212,7 +222,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
           ? { ...cont, type, unit: durUnit, startTimer }
           : type === "numeric"
             ? { ...cont, type, unit: numUnit, scale: logScale ? "log" : "linear" }
-            : { ...cont, type };
+            : { ...cont, type, withTime };
     }
     startTransition(async () => {
       const res = await submit(input);
@@ -286,6 +296,12 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
                   <span className="text-sm font-medium text-ink-2">How sure?</span>
                   <ConfidencePicker value={confidence} onChange={setConfidence} />
                   {type === "duration" && <DurationUnitSelect value={durUnit} onChange={setDurUnit} />}
+                  {type === "date" && (
+                    <label className="flex items-center gap-1.5 text-sm text-ink-2" title="Answer with a time of day, not just a date (⌥T)">
+                      <input type="checkbox" checked={withTime} onChange={toggleTime} className="accent-[var(--accent)]" />
+                      include time
+                    </label>
+                  )}
                   {type === "numeric" && (
                     <>
                       <input
@@ -305,7 +321,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
                     </>
                   )}
                 </div>
-                <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={confidence} unit={durUnit} numericUnit={numUnit} />
+                <QuantileInputs kind={kind!} draft={draft} onDraft={setDraft} confidence={confidence} unit={durUnit} numericUnit={numUnit} withTime={timed} />
                 {parsed?.error && <p className="text-sm text-bad-ink">{parsed.error}</p>}
                 {quantiles && (
                   <div className="space-y-2 rounded-xl bg-surface-2/60 px-3 pb-2 pt-3">
@@ -322,7 +338,7 @@ export function ComposerForm({ track, tz, placeholder, initial, captureStrayTypi
                   tags={[]}
                   unit={unitLabel}
                   tz={tz}
-                  onApply={(q) => setDraft(toDraft(kind!, q, durUnit))}
+                  onApply={(q) => setDraft(toDraft(kind!, q, durUnit, tz, timed))}
                 />
               </div>
             )}

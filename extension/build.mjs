@@ -1,5 +1,5 @@
 // Builds the Chrome extension into extension/dist (and a Web Store zip with --zip).
-//   npm run ext:build                              → talks to https://reckon.vercel.app
+//   npm run ext:build                              → talks to https://reckoned.vercel.app
 //   RECKON_URL=http://localhost:3100 npm run ext:build   → local dev server
 import tailwind from "@tailwindcss/postcss";
 import { build } from "esbuild";
@@ -12,7 +12,7 @@ import postcss from "postcss";
 const extensionDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(extensionDir, "..");
 const outDir = join(extensionDir, "dist");
-const reckonUrl = (process.env.RECKON_URL ?? "https://reckon.vercel.app").replace(/\/$/, "");
+const reckonUrl = (process.env.RECKON_URL ?? "https://reckoned.vercel.app").replace(/\/$/, "");
 // bump for every Web Store upload
 const version = "0.1.0";
 

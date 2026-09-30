@@ -45,7 +45,7 @@ Reckon talks to Postgres directly and has its own sessions, so from Supabase you
 | `binary` | probability, 1–99% | `forecasts.probability` |
 | `duration` | low / best guess / high at the question's confidence (default 80%), optional task timer | minutes; always log scale |
 | `numeric` | low / best guess / high | raw numbers; linear or log scale |
-| `date` | low / best guess / high | epoch ms (local noon) |
+| `date` | low / best guess / high, optionally with a time of day | epoch ms (local noon for a day; `unit = "datetime"` when times are used) |
 
 The composer guesses the type from the wording ("How long…", "When…", "Will…") and parses deadlines ("by Friday", "tonight").
 

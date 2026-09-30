@@ -41,7 +41,14 @@ export const createQuestionSchema = z.discriminatedUnion("type", [
     forecast: quantilesSchema,
     startTimer: z.boolean().default(false),
   }),
-  z.object({ ...common, type: z.literal("date"), confidence, forecast: quantilesSchema }),
+  z.object({
+    ...common,
+    type: z.literal("date"),
+    confidence,
+    /** epoch ms; with a time of day, or local noon for a day */
+    forecast: quantilesSchema,
+    withTime: z.boolean().default(false),
+  }),
 ]);
 export type CreateQuestionInput = z.input<typeof createQuestionSchema>;
 

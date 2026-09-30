@@ -75,6 +75,8 @@ export function IntervalStrip({
   const ticks =
     q.type === "date" ? dayTicks(inv(lo), inv(hi)) : log ? niceLog(inv(lo), inv(hi), q.type === "duration") : niceLinear(lo, hi);
   const v = (x: number) => fmtValue(q, x, tz);
+  // axis ticks sit on days even when forecasts carry a time of day
+  const tick = (x: number) => (q.type === "date" ? fmtValue({ type: "date" }, x, tz) : v(x));
 
   return (
     <div>
@@ -119,7 +121,7 @@ export function IntervalStrip({
       <div className="relative mt-2 h-5 border-t border-[var(--axis)] text-[11px] text-ink-3 tnum">
         {ticks.map((t) => (
           <span key={t} className="absolute top-1 -translate-x-1/2 whitespace-nowrap" style={{ left: `${pos(t)}%` }}>
-            {v(t)}
+            {tick(t)}
           </span>
         ))}
       </div>

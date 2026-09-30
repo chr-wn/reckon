@@ -1,4 +1,4 @@
-import { casual } from "chrono-node/en";
+import { casual } from "chrono-node";
 
 const endOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 0, 0);
 const endOfMonth = (d: Date) => new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 0, 0);

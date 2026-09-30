@@ -7,7 +7,7 @@ import { Button, Card, ErrorText, Label } from "@/components/ui";
 import { VisibilityToggle, type Visibility } from "@/components/visibility-toggle";
 import { deleteQuestion, resolveQuestion, saveReflection, unresolveQuestion, updateQuestion } from "@/lib/actions/questions";
 import { DURATION_UNITS, type DurationUnit } from "@/lib/constants";
-import { toMinutes } from "@/lib/format";
+import { hasTimeOfDay, toMinutes } from "@/lib/format";
 import { fromDateTimeInput, toDateTimeInput } from "@/lib/parse-date";
 
 interface Q {
@@ -33,7 +33,7 @@ export function ResolvePanel({ q, overdue }: { q: Q; overdue: boolean }) {
   function resolveValue() {
     setError(null);
     let v: number | null;
-    if (q.type === "date") v = fromDateInput(value);
+    if (q.type === "date") v = hasTimeOfDay(q) ? (fromDateTimeInput(value)?.getTime() ?? null) : fromDateInput(value);
     else {
       const n = Number(value.replace(/,/g, ""));
       v = value.trim() && Number.isFinite(n) ? (q.type === "duration" ? toMinutes(n, unit) : n) : null;
@@ -62,7 +62,7 @@ export function ResolvePanel({ q, overdue }: { q: Q; overdue: boolean }) {
             <div className="flex gap-2">
               <input
                 id="actual"
-                type={q.type === "date" ? "date" : "text"}
+                type={q.type === "date" ? (hasTimeOfDay(q) ? "datetime-local" : "date") : "text"}
                 inputMode={q.type === "date" ? undefined : "decimal"}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
